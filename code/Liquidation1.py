@@ -18,6 +18,7 @@ class X_t(FSDE):
     def sig_t(self, t, x):
         sig = np.array([[self.sig_s, 0], [0, self.eps]]).reshape((2, 2, 1))  # 2 x 2
         return np.repeat(sig, x.shape[1], axis=2)                            # 2 x 2 x M
+           #[:, :, np.newaxis]
 
 
 class Y_t(BSDE):
