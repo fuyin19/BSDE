@@ -48,6 +48,17 @@ def BS_EuroCall(S, T, K, r, q, sig):
     return (FT * norm.cdf(d_1) - K * norm.cdf(d_2)) * np.exp(-r * T)
 
 
+def BS_EuroPut(S, T, K, r, q, sig):
+    """
+    BS European put option price by put-call parity
+    """
+
+    discount = np.exp(-r * T)
+    call = BS_EuroCall(S=S, T=T, K=K, r=r, q=q, sig=sig)
+
+    return call - S + discount * K
+
+
 # Implement the FBSDE
 class S_t(FSDE):
     """
@@ -79,6 +90,6 @@ class Y_t(BSDE):
     def f(self, t, x, y, z):
         return -1 * ((self.mu - self.r) / self.sig * z[0, 0] + self.r * y)
 
-    def g(self, T, x):
+    def g(self, T, x, level=0.01):
         return np.maximum(-self.K + x, 0)
 

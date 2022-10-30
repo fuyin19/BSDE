@@ -75,6 +75,9 @@ class BS_FDM_implicit:
 
             # since it's an american option
             self.u[i + 1, :] = np.maximum(self.u[i + 1, :], self.u[0, :])
+            # print(self.u[i + 1, :])
+            # print(self.u[0, :])
+            # print(np.maximum(self.u[i + 1, :], self.u[0, :]))
 
         return self.u
 
@@ -105,12 +108,23 @@ class Y_t(BSDE):
         self.sig = sig
         self.K = K
 
-    def f(self, t, x, y, z):
+    def f(self, t, x, y, z, level=0.01):
+        # Check Continuation Region
         g_val = self.g(t, x)  # d2 x M
         indicator_val = np.where(y-g_val < 0, 1, 0)  # d2 x M
-        val = -1 * np.where(x < self.K, -1*self.mu*x, 0)  # d2 x M
 
-        return val*indicator_val
+        # Compute Lg
+        eps = level*self.K
+        a = self.K - eps
+        b = self.K + eps
+        partial_x = np.where(x < a, -1, 0) + np.where((x >= a) & (x <= b), 1/(2*eps)*(x-b), 0)  # d2 x M
+        partial_xx = np.where((x >= a) & (x <= b), 1/(2*eps), 0)  # d2 x M
+        Lg = self.mu * x * partial_x + 0.5 * self.sig**2 * partial_xx  # d2 x M
+
+        # Compute (Lg)^-
+        Lg_minus = -1 * np.where(Lg <= 0, Lg, 0)  # d2 x M
+
+        return Lg_minus * indicator_val
 
     def g(self, T, x):
         return np.maximum(self.K - x, 0)

@@ -8,7 +8,7 @@ import LSMC_engine
 
 def test_european_call():
     """
-    Test the European call option price computed by FBSDE
+    test the European call option price computed by FBSDE
     """
     # Market Parameters
     mu = 0.1
@@ -49,7 +49,7 @@ def test_european_call():
 
 def test_american_put():
     """
-    Test the american put option price computed by FBSDE
+    test the american put option price computed by FBSDE
     """
     # Market Parameters
     r = 0.
@@ -73,13 +73,13 @@ def test_american_put():
 
     LSMC_solver = LSMC.LSMC_linear(Y_sim, S_sim, dZ, s0, dt, reg_method=None, basis_funcs_type='poly')
     LSMC_solver.solve()
-    print("American vanilla option pricing by BSDE: {}".format(LSMC_solver.y0[0]))
+    print("American vanilla option pricing by BSDE: {}, with S0 = {}".format(LSMC_solver.y0[0], s0[0]))
 
     # PDE - variational equation
     S_min = 0
     S_max = s0[0]*2
 
-    nt = N-1
+    nt = N
     ns = 2*S_max-1
     S_s = np.linspace(S_min, S_max, ns+2)
     t_s = np.linspace(0, T, nt+1)
@@ -94,12 +94,15 @@ def test_american_put():
 
     u = u_implicit[-1, :]
     s0_idx = 2*s0[0]
-    print("American vanilla option pricing by PDE: {} with S0 = {}".format(u[s0_idx], S_s[s0_idx]))
+    print("American vanilla option pricing by PDE: {}, with S0 = {}".format(u[s0_idx], S_s[s0_idx]))
+
+    BS_European_put = european_option.BS_EuroPut(S=s0[0], T=T, K=K, r=r, q=0, sig=sig)
+    print("American vanilla put option by BS with r=0: {}, with S0 = {}".format(BS_European_put, s0[0]))
 
 
 def test_liquidation1():
     """
-    Test the PDE solver using the example in section 6.3
+    test the PDE solver using the example in section 6.3
     """
 
     # Simulation parameters
@@ -140,10 +143,10 @@ def test_engine():
 
 
 def main():
-    test_engine()
-    # test_american_put()
-    #test_european_call()
-    #test_liquidation1()
+    # test_engine()
+    test_american_put()
+    # test_european_call()
+    # test_liquidation1()
 
 
 if __name__ == '__main__':
