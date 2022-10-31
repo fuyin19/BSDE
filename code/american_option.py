@@ -102,16 +102,20 @@ class Y_t(BSDE):
     """
     Y_t for American vanilla option
     """
-    def __init__(self, d2, K, mu, sig):
+    def __init__(self, d2, K, mu, sig, **kwargs):
         super().__init__(d2)
         self.mu = mu
         self.sig = sig
         self.K = K
+        self.payoff_type = kwargs.get('payoff_type', 'vanilla')
+        if self.payoff_type == 'barrier':
+            self.lower_barrier = kwargs.get('lower_barrier', 20)
+            self.upper_barrier = kwargs.get('upper_barrier', 200)
 
     def f(self, t, x, y, z, level=0.01):
         # Check Continuation Region
         g_val = self.g(t, x)  # d2 x M
-        indicator_val = np.where(y-g_val < 0, 1, 0)  # d2 x M
+        indicator_ex = np.where(y-g_val <= 0, 1, 0)  # d2 x M
 
         # Compute Lg
         eps = level*self.K
@@ -119,12 +123,24 @@ class Y_t(BSDE):
         b = self.K + eps
         partial_x = np.where(x < a, -1, 0) + np.where((x >= a) & (x <= b), 1/(2*eps)*(x-b), 0)  # d2 x M
         partial_xx = np.where((x >= a) & (x <= b), 1/(2*eps), 0)  # d2 x M
-        Lg = self.mu * x * partial_x + 0.5 * self.sig**2 * partial_xx  # d2 x M
+        Lg = self.mu * x * partial_x + 0.5 * self.sig**2 * x**2 * partial_xx  # d2 x M
 
-        # Compute (Lg)^-
-        Lg_minus = -1 * np.where(Lg <= 0, Lg, 0)  # d2 x M
+        # Compute (Lg - rg)^-
+        val = Lg - self.mu*g_val
+        val_minus = -1 * np.where(val <= 0, val, 0)  # d2 x M
 
-        return Lg_minus * indicator_val
+        # Compute -rg + (Lg - rg)^- * I
+        return -self.mu * g_val + val_minus * indicator_ex
+
+        if False:
+            if self.payoff_type == 'vanilla':
+                return Lg_minus * indicator_ex
+            elif self.payoff_type == 'barrier':
+                indicator_not_hit_barrier = np.where((x >= self.lower_barrier) & (x <= self.upper_barrier), 1, 0)
+                return Lg_minus * indicator_ex * indicator_not_hit_barrier
 
     def g(self, T, x):
-        return np.maximum(self.K - x, 0)
+        if self.payoff_type == 'vanilla':
+            return np.maximum(self.K - x, 0)
+        elif self.payoff_type == 'barrier':
+            return np.maximum(self.K - x, 0) * np.where((x >= self.lower_barrier) & (x <= self.upper_barrier), 1, 0)
