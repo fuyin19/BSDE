@@ -11,16 +11,16 @@ def test_european_call():
     Test the European call option price computed by FBSDE
     """
     # Market Parameters
-    mu = 0.1
-    r = 0.1
-    sig = 0.3
+    mu = 0.06
+    r = 0.06
+    sig = 0.25
     s0 = np.array([40])
     T = 1
     K = 40
 
     # Simulation parameters
-    M = 2 ** 14
-    dt = 1 / 252.
+    M = 2 ** 16
+    dt = (1 / 252.)
     N = int(T/dt)
     d = 1
     d1 = 1
@@ -32,7 +32,7 @@ def test_european_call():
     basis_funcs = [lambda x, coef=i: x ** coef for i in range(3)]
 
     S_sim = european_option.S_t(mu, sig, d, d1)
-    Y_sim = european_option.Y_t(mu, r, sig, d2, K)
+    Y_sim = european_option.Y_t(mu, r, sig, d2, K, method=2)
 
     LSMC_solver = LSMC.LSMC_linear(Y_sim, S_sim, dZ, s0, dt, reg_method=None, basis_funcs_type='poly')
     # LSMC_solver = LSMC.LSMC_svm(Y_sim, S_sim, dZ, s0, dt, basis_funcs_type='trig')

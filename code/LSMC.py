@@ -203,7 +203,9 @@ class LSMC_linear(LSMC):
             self.model = Lasso(alpha=lb, fit_intercept=False)
         elif reg_method == 'ridge':
             lb = kwargs.get('lb', 1)
-            self.model = Ridge(alpha=lb, fit_intercept=False)
+            # self.basis = self.basis[1:]
+            # self.kn = self.kn - 1
+            self.model = Ridge(alpha=lb, fit_intercept=True)
         elif reg_method == 'elastic_net':
             lb = kwargs.get('lb', 1)
             l1_ratio = kwargs.get('l1_ratio', 0.5)

@@ -41,16 +41,19 @@ class LSMC_engine(object):
                 r = self.r_s[idx_rr[i]]
                 sig = self.sig_s[idx_ss[i]]
                 K = self.K_s[idx_KK[i]]
-
                 S_sim = european_option.S_t(mu=r, sig=sig, d=self.d, d1=self.d1)
-                Y_sim = european_option.Y_t(mu=r, r=r, sig=sig, d2=self.d2, K=K)
+
+                if self.option_type == 'European':
+                    Y_sim = european_option.Y_t(mu=r, r=r, sig=sig, d2=self.d2, K=K)
+                elif self.option_type == 'American':
+                    Y_sim = american_option.Y_t(mu=r, sig=sig, d2=self.d2, K=K, T=self.T)
 
                 LSMC_solver = LSMC.LSMC_linear(Y_sim, S_sim, self.dZ, self.x0, self.dt,
                                                reg_method=None, basis_funcs_type='poly')
 
                 LSMC_solver.solve()
                 self.prices[idx_rr[i], idx_ss[i], idx_KK[i]] = LSMC_solver.y0[0]
-                print('r={}, sig={}, K={}: {}'.format(r, sig, K, LSMC_solver.y0[0]))
+                # print('r={}, sig={}, K={}: {}'.format(r, sig, K, LSMC_solver.y0[0]))
 
 
 

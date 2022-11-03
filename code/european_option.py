@@ -80,15 +80,19 @@ class Y_t(BSDE):
     """
     Y_t for European vanilla option
     """
-    def __init__(self, mu, r, sig, d2, K):
+    def __init__(self, mu, r, sig, d2, K, **kwargs):
         super().__init__(d2)
         self.mu = mu
         self.r = r
         self.sig = sig
         self.K = K
+        self.method = kwargs.get('method', 1)
 
     def f(self, t, x, y, z):
-        return -1 * ((self.mu - self.r) / self.sig * z[0, 0] + self.r * y)
+        if self.method == 1:
+            return -1 * ((self.mu - self.r) / self.sig * z[0, 0] + self.r * y)
+        elif self.method == 2:
+            return -self.r * y
 
     def g(self, T, x, level=0.01):
         return np.maximum(-self.K + x, 0)

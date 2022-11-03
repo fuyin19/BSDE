@@ -12,16 +12,16 @@ def test_american_put(payoff_type="vanilla", **kwargs):
     Test the american put option price computed by FBSDE
     """
     # Market Parameters
-    r = 0.03
-    sig = 0.2
+    r = 0.06
+    sig = 0.25
     s0 = np.array([40])
-    T = 1
-    K = 50
+    T = 1.
+    K = 40.
     lower_barrier = kwargs.get('lower_barrier', 20)
     upper_barrier = kwargs.get('upper_barrier', 200)
 
     # Simulation parameters
-    M = 2 ** 16
+    M = 2 ** 14
     dt = (1 / 252.)
     N = int(T/dt)
     d = 1
@@ -31,18 +31,26 @@ def test_american_put(payoff_type="vanilla", **kwargs):
 
     # BSDE - LSMC
     S_sim = american_option.S_t(mu=r, sig=sig, d=d, d1=d1)
-    Y_sim = american_option.Y_t(d2=d2, mu=r, sig=sig, K=K, payoff_type=payoff_type,
-                                lower_barrier=lower_barrier, upper_barrier=upper_barrier)
 
+    # BSDE Method 1
+    Y_sim = american_option.Y_t(d2=d2, mu=r, sig=sig, K=K, T=T, payoff_type=payoff_type,
+                                lower_barrier=lower_barrier, upper_barrier=upper_barrier, method=1)
+    LSMC_solver = LSMC.LSMC_linear(Y_sim, S_sim, dZ, s0, dt, reg_method='ridge', basis_funcs_type='poly')
+    LSMC_solver.solve()
+    print("American {} option pricing by BSDE method 1: {}, with S0 = {}".format(payoff_type, LSMC_solver.y0[0], s0[0]))
+
+    # BSDE Method 2
+    Y_sim = american_option.Y_t(d2=d2, mu=r, sig=sig, K=K, T=T, payoff_type=payoff_type,
+                                lower_barrier=lower_barrier, upper_barrier=upper_barrier, method=2)
     LSMC_solver = LSMC.LSMC_linear(Y_sim, S_sim, dZ, s0, dt, reg_method=None, basis_funcs_type='poly')
     LSMC_solver.solve()
-    print("American {} option pricing by BSDE: {}, with S0 = {}".format(payoff_type, LSMC_solver.y0[0], s0[0]))
+    print("American {} option pricing by BSDE method 2: {}, with S0 = {}".format(payoff_type, LSMC_solver.y0[0], s0[0]))
 
     # PDE - variational equation
     S_min = 0.0
     S_max = 200
 
-    nt = 4555
+    nt = 5000
     ns = 399
     S_s = np.linspace(S_min, S_max, ns+2)
     t_s = np.linspace(0, T, nt+1)
