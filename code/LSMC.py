@@ -3,18 +3,20 @@ import numpy as np
 from abc import ABC, abstractmethod
 from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
 from sklearn.svm import SVR
+from sklearn.neural_network import MLPRegressor
 
 
 def generate_z_matrix(n_paths, n_steps, d_bm, seed=42):
     """
     Function for generating a matrix of iid standard normal random variables
 
-    Inputs:
-        n_paths: number of paths
-        n_steps: number of time steps/dt in each path
-        d_bm: dimension of the Brownian motion increments
 
-    Output:
+    :param n_paths: number of paths
+    :param n_steps: number of time steps/dt in each path
+    :param d_bm: dimension of the Brownian motion increments
+    :param seed: the random state
+
+    :returns:
         a normalized matrix of normal random variables with dimension (M x N x d), where
         M = number of path
         N = number total time steps in each path
@@ -38,7 +40,7 @@ class LSMC(ABC):
     X_t, the FSDE
     """
 
-    def __init__(self, Y_t, X_t, dZ, x0, dt, basis_funcs=None, **kwargs):
+    def __init__(self, Y_t, X_t, dZ, x0, dt, model_params={}, basis_funcs=None, **kwargs):
         """
         Initialize the LSMC solver
 
@@ -57,8 +59,9 @@ class LSMC(ABC):
         self.N, self.d, self.M = dZ.shape            # M, N, d
         self.d1, self.d2 = x0.shape[0], self.Y_t.d2  # d1, d2
 
-        self.x0 = x0                # Initial value of X_t
-        self.dt = dt                # Time increments
+        self.x0 = x0                      # Initial value of X_t
+        self.dt = dt                      # Time increments
+        self.model_params = model_params  # Model parameters
 
         if not basis_funcs:
             basis_funcs_type = kwargs.get('basis_funcs_type', 'poly')
@@ -118,11 +121,10 @@ class LSMC(ABC):
             1. alpha, Model parameter for Z_t approximation
             2. beta, Model parameter for Y_t approximation
 
-        Input:
-            n, Current time step
-            x, X_n, d1 x M
-            y, Y_n+1, d2 x M
-        Output:
+        :param n: Current time step
+        :param x: X_n, d1 x M
+        :param y: Y_n+1, d2 x M
+        :returns:
             z, Z_t at current time, d2 x d x M
             y, Y_t at current time, d2 x M
         """
@@ -132,10 +134,10 @@ class LSMC(ABC):
         """
         Compute target variable z in the regression
 
-        Input:
-            y, current y, d2 x M
-            dz, BM incre. before scaling, d x M
-        Output:
+        :param y: Current y, d2 x M
+        :param dz: BM incre. before scaling, d x M
+
+        :returns:
             z_estimation, d2 x d x M
         """
         if self.d1 == 1 and self.d == 1:
@@ -149,12 +151,12 @@ class LSMC(ABC):
     def est_y(self, t, x, y, z):
         """
         Compute target variable y in the regression
+        :param t: Current time
+        :param x: d1 x M
+        :param y: d2 x M
+        :param z: d2 x d x M
 
-        Input:
-            x, d1 x M
-            y, d2 x M
-            z, d2 x d x M
-        Output:
+        :returns:
             y_estimation, d2 x M
         """
         return y + self.Y_t.f(t, x, y, z) * self.dt
@@ -190,28 +192,20 @@ class LSMC_linear(LSMC):
     Least Square Monte-Carlo method for solving FBSDE, where Y_t and Z_t are approximated by linear combination
     of basis functions of X_t
     """
-    def __init__(self, Y_t, X_t, dZ, x0, dt, reg_method=None, basis_funcs=None, **kwargs):
-        super().__init__(Y_t, X_t, dZ, x0, dt, basis_funcs, **kwargs)
+    def __init__(self, Y_t, X_t, dZ, x0, dt, model_params={}, reg_method=None, basis_funcs=None, **kwargs):
+        super().__init__(Y_t, X_t, dZ, x0, dt, model_params, basis_funcs, **kwargs)
 
         self.alphas = np.zeros(shape=(self.N - 1, self.n_features, self.d2, self.d))  # All alphas, N-1 x kn x d2 x d
         self.betas = np.zeros(shape=(self.N - 1, self.n_features, self.d2))           # All betas, N-1 x kn x d2
 
-        self.reg_method = reg_method
-
         if reg_method == 'lasso':
-            lb = kwargs.get('lb', 1)
-            self.model = Lasso(alpha=lb, fit_intercept=False)
+            self.model = Lasso(**self.model_params)
         elif reg_method == 'ridge':
-            lb = kwargs.get('lb', 1)
-            # self.basis = self.basis[1:]
-            # self.kn = self.kn - 1
-            self.model = Ridge(alpha=lb, fit_intercept=True)
+            self.model = Ridge(**self.model_params)
         elif reg_method == 'elastic_net':
-            lb = kwargs.get('lb', 1)
-            l1_ratio = kwargs.get('l1_ratio', 0.5)
-            self.model = ElasticNet(alpha=lb, l1_ratio=l1_ratio, fit_intercept=False)
+            self.model = ElasticNet(**self.model_params)
         else:
-            self.model = LinearRegression(fit_intercept=False)
+            self.model = LinearRegression(**self.model_params)
 
     def fit(self, n, x, y):
         """
@@ -257,21 +251,18 @@ class LSMC_svm(LSMC):
     Least Square Monte-Carlo method for solving FBSDE, where Y_t and Z_t are approximated by linear combination
     of basis functions of X_t
     """
-    def __init__(self, Y_t, X_t, dZ, x0, dt, basis_funcs=None, **kwargs):
-        super().__init__(Y_t, X_t, dZ, x0, dt, basis_funcs, **kwargs)
-
-        self.kernel = kwargs.get('kernel', 'linear')
-        self.tol = kwargs.get('tol', 1e-3)
+    def __init__(self, Y_t, X_t, dZ, x0, dt, model_params={}, basis_funcs=None, **kwargs):
+        super().__init__(Y_t, X_t, dZ, x0, dt, model_params, basis_funcs, **kwargs)
 
     def fit(self, n, x, y):
         """
         Compute (alpha, Z_t), (beta, Y_t) at current time using linear model
 
-        Input:
-            n, Current time step
-            x, X_n, d1 x M
-            y, Y_n+1, d2 x M
-        Output:
+        :param n: Current time step
+        :param x: X_n, d1 x M
+        :param y: Y_n+1, d2 x M
+
+        :returns:
             alpha, alpha at current time, k_n x d2 x d
             z, Z_t at current time, d2 x d x M
             beta, beta at current time, k_n x d2
@@ -286,7 +277,7 @@ class LSMC_svm(LSMC):
         z = np.zeros(shape=(self.d2 * self.d, self.M))                                        # (d2 x d) x M
 
         for i in range(self.d2 * self.d):
-            SVR_z = SVR(kernel=self.kernel, tol=self.tol).fit(X, z_fit[:, i])
+            SVR_z = SVR(**self.model_params).fit(X, z_fit[:, i])
             z_i = SVR_z.predict(X)                                              # M
             z[i, :] = z_i
         z = np.reshape(z, (self.d2, self.d, self.M))                            # d2 x d x M
@@ -296,8 +287,50 @@ class LSMC_svm(LSMC):
         y = np.zeros(shape=(self.d2, self.M))     # d2 x M
 
         for i in range(self.d2):
-            SVR_y = SVR(kernel=self.kernel, tol=self.tol).fit(X, y_fit[:, i])
+            SVR_y = SVR(**self.model_params).fit(X, y_fit[:, i])
             y_i = SVR_y.predict(X)                # M
             y[i, :] = y_i
 
         return z, y
+
+
+class LSMC_neural_net(LSMC):
+    """
+    Y_t and Z_t are approximated by Neural Networks
+    """
+
+    def __init__(self, Y_t, X_t, dZ, x0, dt, basis_funcs=None, model_params={}, **kwargs):
+        super().__init__(Y_t, X_t, dZ, x0, dt, model_params, basis_funcs, **kwargs)
+        self.y_func = []
+        self.z_func = []
+
+    def fit(self, n, x, y):
+        t_n = n * self.dt            # Current time at n
+        dZ_n = self.dZ[n, :, :]      # Brownian motion increments before scaling, d x M
+        X = self.basis_transform(x)  # M x kn
+        X = x.T
+
+        # Compute z
+        z_fit = self.est_z(y, dZ_n).transpose((2, 0, 1)).reshape(self.M, self.d2 * self.d)  # d2 x d x M -> M x d2 x d ->  M x (d2 x d)
+        MLP_z = MLPRegressor(**self.model_params)
+        if self.d2 * self.d == 1:
+            MLP_z.fit(X, z_fit.ravel())
+        else:
+            MLP_z.fit(X, z_fit)
+        z = MLP_z.predict(X).reshape(self.M, self.d2, self.d).transpose((1, 2, 0))  # M x (d2 x d) -> M x d2 x d -> d2 x d x M
+
+        # Compute y
+        y_fit = self.est_y(t_n, x, y, z).T  # d2 x M -> M x d2
+        MLP_y = MLPRegressor(**self.model_params)
+        if self.d2 == 1:
+            MLP_y.fit(X, y_fit.ravel())
+            y = MLP_y.predict(X).reshape(self.M, self.d2).T
+        else:
+            MLP_y.fit(X, y_fit)
+            y = MLP_y.predict(X).T  # M x d2 -> d2 x M
+
+        # record value
+        self.y_func.append(MLP_y)
+        self.z_func.append(MLP_z)
+        return z, y
+

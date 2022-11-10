@@ -13,7 +13,7 @@ def test_american_put(payoff_type="vanilla", **kwargs):
     """
     # Market Parameters
     r = 0.06
-    sig = 0.25
+    sig = 0.2
     s0 = np.array([40])
     T = 1.
     K = 40.
@@ -21,7 +21,7 @@ def test_american_put(payoff_type="vanilla", **kwargs):
     upper_barrier = kwargs.get('upper_barrier', 200)
 
     # Simulation parameters
-    M = 2 ** 14
+    M = 2 ** 16
     dt = (1 / 252.)
     N = int(T/dt)
     d = 1

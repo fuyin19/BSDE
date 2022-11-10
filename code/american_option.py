@@ -122,22 +122,6 @@ class Y_t(BSDE):
 
         if self.method == 1:
             # Check Continuation Region
-            g_val = np.maximum(self.K - x, 0)
-            indicator_ex = np.where(y*np.exp(self.mu*t) - g_val <= 0, 1, 0)  # d2 x M
-
-            # Compute Lg
-            partial_x = np.where(x < a, -1, 0) + np.where((x >= a) & (x <= b), 1 / (2 * eps) * (x - b), 0)  # d2 x M
-            partial_xx = np.where((x >= a) & (x <= b), 1 / (2 * eps), 0)  # d2 x M
-            Lg = self.mu * x * partial_x + 0.5 * self.sig ** 2 * x ** 2 * partial_xx  # d2 x M
-
-            # Compute c = -Lg + rg
-            c = -Lg + self.mu * g_val
-
-            #  Compute q = disc * c * indicator_ex
-            return np.exp(-self.mu * t) * c * indicator_ex
-
-        if self.method == 2:
-            # Check Continuation Region
             g_val = self.g(t, x)   # d2 x M
             indicator_ex = np.where(y-g_val <= 0, 1, 0)  # d2 x M
 
@@ -154,12 +138,28 @@ class Y_t(BSDE):
             # -self.mu * y + val_minus * indicator_ex
             return -self.mu * y + val_minus * indicator_ex
 
+        if self.method == 2:
+            # Check Continuation Region
+            g_val = np.maximum(self.K - x, 0)
+            indicator_ex = np.where(y*np.exp(self.mu*t) - g_val <= 0, 1, 0)  # d2 x M
+
+            # Compute Lg
+            partial_x = np.where(x < a, -1, 0) + np.where((x >= a) & (x <= b), 1 / (2 * eps) * (x - b), 0)  # d2 x M
+            partial_xx = np.where((x >= a) & (x <= b), 1 / (2 * eps), 0)  # d2 x M
+            Lg = self.mu * x * partial_x + 0.5 * (self.sig ** 2) * (x ** 2) * partial_xx  # d2 x M
+
+            # Compute c = -Lg + rg
+            c = -Lg + self.mu * g_val
+
+            #  Compute q = disc * c * indicator_ex
+            return np.exp(-self.mu * t) * c * indicator_ex
+
     def g(self, T, x):
         if self.payoff_type == 'vanilla':
             if self.method == 1:
-                return np.maximum(self.K - x, 0) * np.exp(-self.mu*T)
-            if self.method == 2:
                 return np.maximum(self.K - x, 0)
+            if self.method == 2:
+                return np.maximum(self.K - x, 0) * np.exp(-self.mu*T)
 
         elif self.payoff_type == 'barrier':
             return np.maximum(self.K - x, 0) * np.where((x >= self.lower_barrier) & (x <= self.upper_barrier), 1, 0)
