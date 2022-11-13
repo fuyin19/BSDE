@@ -81,10 +81,6 @@ class LSMC(ABC):
                 self.kn = 1 + 2*n_freq
                 self.n_features = (self.kn - 1) * self.d1 + 1
 
-                # [lambda x:x**0, lambda x:np.cos(x), lambda x:np.cos(2*x), lambda x:np.cos(3*x),
-                # lambda x:np.cos(4*x), lambda x:np.cos(5*x), lambda x:np.cos(6*x),
-                # lambda x: np.sin(x), lambda x: np.sin(2*x), lambda x: np.sin(3*x),
-                # lambda x:np.sin(4*x), lambda x:np.sin(5*x), lambda x:np.sin(6*x)]
         else:
             self.kn = len(basis_funcs)  # Number of basis function
             self.n_features = (self.kn - 1) * self.d1 + 1  # Number of features in the feature map
@@ -208,19 +204,7 @@ class LSMC_linear(LSMC):
             self.model = LinearRegression(**self.model_params)
 
     def fit(self, n, x, y):
-        """
-        Compute (alpha, Z_t), (beta, Y_t) at current time using linear model
 
-        Input:
-            n, Current time step
-            x, X_n, d1 x M
-            y, Y_n+1, d2 x M
-        Output:
-            alpha, the linear coefficient of Z_t at current time step n, k_n x d2 x d
-            z, Z_t at current time, d2 x d x M
-            beta, the linear coefficient of Y_t at current time step n, k_n x d2
-            y, Y_t at current time, d2 x M
-        """
         t_n = n * self.dt               # Current time at n
         dZ_n = self.dZ[n, :, :]         # Brownian motion increments before scaling, d x M
         X = self.basis_transform(x)     # M x kn
@@ -255,19 +239,6 @@ class LSMC_svm(LSMC):
         super().__init__(Y_t, X_t, dZ, x0, dt, model_params, basis_funcs, **kwargs)
 
     def fit(self, n, x, y):
-        """
-        Compute (alpha, Z_t), (beta, Y_t) at current time using linear model
-
-        :param n: Current time step
-        :param x: X_n, d1 x M
-        :param y: Y_n+1, d2 x M
-
-        :returns:
-            alpha, alpha at current time, k_n x d2 x d
-            z, Z_t at current time, d2 x d x M
-            beta, beta at current time, k_n x d2
-            y, Y_t at current time, d2 x M
-        """
         t_n = n * self.dt            # Current time at n
         dZ_n = self.dZ[n, :, :]      # Brownian motion increments before scaling, d x M
         X = self.basis_transform(x)  # M x kn
@@ -307,7 +278,7 @@ class LSMC_neural_net(LSMC):
     def fit(self, n, x, y):
         t_n = n * self.dt            # Current time at n
         dZ_n = self.dZ[n, :, :]      # Brownian motion increments before scaling, d x M
-        X = self.basis_transform(x)  # M x kn
+        # X = self.basis_transform(x)  # M x kn
         X = x.T
 
         # Compute z
@@ -333,4 +304,3 @@ class LSMC_neural_net(LSMC):
         self.y_func.append(MLP_y)
         self.z_func.append(MLP_z)
         return z, y
-
