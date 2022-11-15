@@ -35,34 +35,39 @@ def generate_z_matrix(n_paths, n_steps, d_bm, seed=42):
 class LSMC(ABC):
     """
     Least Square Monte Carlo Method for FBSDE
-
-    Y_t, the BSDE
-    X_t, the FSDE
     """
 
-    def __init__(self, Y_t, X_t, dZ, x0, dt, model_params={}, basis_funcs=None, **kwargs):
+    def __init__(self, FBSDE, config, model_params={}, basis_funcs=None, **kwargs):
         """
         Initialize the LSMC solver
 
-        :param Y_t: the backward dynamics
-        :param X_t: the forward dynamics
-        :param dZ: the unscaled BM increments
-        :param x0: the initial value of X_t
-        :param dt: time increments
+        :param FBSDE: the forward and backward dynamics
+        :param config: configuration of simulation
+        :param model_params: model parameters for the regression model
         :param basis_funcs: list of feature map for X_t, constant function should always be included
         as the first element of the list.
         :param kwargs: additional arguments, i.e. predefined basis function type
         """
-        self.X_t = X_t                 # FSDE dynamics
-        self.Y_t = Y_t                 # BSDE dynamics
-        self.dZ = dZ                   # BM increments,
-        self.N, self.d, self.M = dZ.shape            # M, N, d
-        self.d1, self.d2 = x0.shape[0], self.Y_t.d2  # d1, d2
 
-        self.x0 = x0                      # Initial value of X_t
-        self.dt = dt                      # Time increments
-        self.model_params = model_params  # Model parameters
+        # Config for FBSDE and Simulation
+        self.N, self.M, self.dt, self.x0, self.seed = config.N, config.M, config.dt, config.x0, config.seed
+        self.d, self.d1, self.d2, self.T = FBSDE.d, FBSDE.d1, FBSDE.d2, FBSDE.T
 
+        # Dynamics
+        self.FBSDE = FBSDE
+        self.dZ = generate_z_matrix(n_paths=self.M, n_steps=self.N, d_bm=self.d, seed=self.seed)  # BM increments
+
+        # Initialize path for FBSDE
+        self.y0 = 0                                                           # Initial value of Y_t
+        self.z0 = 0                                                           # Initial value of Z_t
+        self.X_path = self.FBSDE.draw(self.dZ, self.x0, self.dt)              # X_t path, N+1 x d x M
+        self.Y_path = np.zeros(shape=(self.N, self.d2, self.M))               # Y_t path, N x d2 x M
+        self.Z_path = np.zeros(shape=(self.N - 1, self.d2, self.d, self.M))   # Z_t path, N-1 x d2 x d x M
+
+        # Regression Model parameters
+        self.model_params = model_params
+
+        # Basis Functions
         if not basis_funcs:
             basis_funcs_type = kwargs.get('basis_funcs_type', 'poly')
             if basis_funcs_type == 'poly':
@@ -80,32 +85,23 @@ class LSMC(ABC):
 
                 self.kn = 1 + 2*n_freq
                 self.n_features = (self.kn - 1) * self.d1 + 1
-
         else:
-            self.kn = len(basis_funcs)  # Number of basis function
+            self.kn = len(basis_funcs)                     # Number of basis function
             self.n_features = (self.kn - 1) * self.d1 + 1  # Number of features in the feature map
-            self.basis = basis_funcs    # List of basis functions
-
-        self.X_path = self.X_t.draw(self.dZ, self.x0, self.dt)                # X_t path, N+1 x d x M
-        self.Y_path = np.zeros(shape=(self.N, self.d2, self.M))               # Y_t path, N x d2 x M
-        self.Z_path = np.zeros(shape=(self.N - 1, self.d2, self.d, self.M))           # Z_t path, N-1 x d2 x d x M
-
-        self.T = self.N * self.dt  # Maturity
-        self.y0 = 0  # Initial value of Y_t
-        self.z0 = 0  # Initial value of Z_t
+            self.basis = basis_funcs                       # List of basis functions
 
     def basis_transform(self, x):
         """
         Compute the data matrix X after feature map transformation of current X_t for all path
 
         :param x: the current value of X_t for all path, d1 x M
-        :return: X, the data matrix, M x ((k_n-1) x d1 + 1). X = [1, f_2(x_t).T, f_3(x_t).T,..., f_kn(x_t).T]
+        :return: X, the data matrix, M x ((k_n-1) x d1 + 1); X = [1, f_2(x_t).T, f_3(x_t).T,..., f_kn(x_t).T]
         """
         X = np.zeros(shape=(self.M, self.n_features))
 
         for (i, f) in enumerate(self.basis):
             if i == 0:
-                X[:, 0] = np.ones(self.M)        # M
+                X[:, 0] = np.ones(self.M)                   # M
             else:
                 X[:, self.d1*(i-1)+1:self.d1*i+1] = f(x).T  # M x d1
         return X
@@ -116,10 +112,10 @@ class LSMC(ABC):
         Compute Z_t and Y_t approximation at current time using basis functions of X_t alongside with
             1. alpha, Model parameter for Z_t approximation
             2. beta, Model parameter for Y_t approximation
-
         :param n: Current time step
         :param x: X_n, d1 x M
         :param y: Y_n+1, d2 x M
+
         :returns:
             z, Z_t at current time, d2 x d x M
             y, Y_t at current time, d2 x M
@@ -155,7 +151,7 @@ class LSMC(ABC):
         :returns:
             y_estimation, d2 x M
         """
-        return y + self.Y_t.f(t, x, y, z) * self.dt
+        return y + self.FBSDE.f(t, x, y, z) * self.dt
 
     def solve(self):
         """
@@ -163,8 +159,8 @@ class LSMC(ABC):
         """
 
         # n=N
-        x = self.X_path[-1, :, :]  # Final value X_T, d1 x M
-        y = self.Y_t.g(self.T, x)  # Final value Y_T, d2 x M
+        x = self.X_path[-1, :, :]    # Final value X_T, d1 x M
+        y = self.FBSDE.g(self.T, x)  # Final value Y_T, d2 x M
         self.Y_path[-1, :, :] = y
 
         # n = N-1,...,1 -> t_N-1,...,t_1
@@ -179,7 +175,7 @@ class LSMC(ABC):
             self.Z_path[n - 1, :, :, :] = z
             self.Y_path[n - 1, :, :] = y
 
-        self.z0 = np.mean(self.est_z(y, self.dZ[0, :, :]), axis=2)  # d2 x d, d2 x d x M along M
+        self.z0 = np.mean(self.est_z(y, self.dZ[0, :, :]), axis=2)     # d2 x d, d2 x d x M along M
         self.y0 = np.mean(self.est_y(0, self.x0, y, self.z0), axis=1)  # d2, d2 x M along M
 
 
@@ -188,8 +184,8 @@ class LSMC_linear(LSMC):
     Least Square Monte-Carlo method for solving FBSDE, where Y_t and Z_t are approximated by linear combination
     of basis functions of X_t
     """
-    def __init__(self, Y_t, X_t, dZ, x0, dt, model_params={}, reg_method=None, basis_funcs=None, **kwargs):
-        super().__init__(Y_t, X_t, dZ, x0, dt, model_params, basis_funcs, **kwargs)
+    def __init__(self, FBSDE, config, model_params={}, reg_method=None, basis_funcs=None, **kwargs):
+        super().__init__(FBSDE, config, model_params, basis_funcs, **kwargs)
 
         self.alphas = np.zeros(shape=(self.N - 1, self.n_features, self.d2, self.d))  # All alphas, N-1 x kn x d2 x d
         self.betas = np.zeros(shape=(self.N - 1, self.n_features, self.d2))           # All betas, N-1 x kn x d2
@@ -235,8 +231,8 @@ class LSMC_svm(LSMC):
     Least Square Monte-Carlo method for solving FBSDE, where Y_t and Z_t are approximated by linear combination
     of basis functions of X_t
     """
-    def __init__(self, Y_t, X_t, dZ, x0, dt, model_params={}, basis_funcs=None, **kwargs):
-        super().__init__(Y_t, X_t, dZ, x0, dt, model_params, basis_funcs, **kwargs)
+    def __init__(self, FBSDE, config, model_params={}, basis_funcs=None, **kwargs):
+        super().__init__(FBSDE, config, model_params, basis_funcs, **kwargs)
 
     def fit(self, n, x, y):
         t_n = n * self.dt            # Current time at n
@@ -270,8 +266,8 @@ class LSMC_neural_net(LSMC):
     Y_t and Z_t are approximated by Neural Networks
     """
 
-    def __init__(self, Y_t, X_t, dZ, x0, dt, basis_funcs=None, model_params={}, **kwargs):
-        super().__init__(Y_t, X_t, dZ, x0, dt, model_params, basis_funcs, **kwargs)
+    def __init__(self, FBSDE, config, basis_funcs=None, model_params={}, **kwargs):
+        super().__init__(FBSDE, config, model_params, basis_funcs, **kwargs)
         self.y_func = []
         self.z_func = []
 

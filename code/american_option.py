@@ -82,38 +82,30 @@ class BS_FDM_implicit:
         return self.u
 
 
-class S_t(FSDE):
+class BS_american_FBSDE(FBSDE):
     """
     X_t for American vanilla option
     """
-    def __init__(self, mu, sig, d, d1, exclude_spot=False):
-        super().__init__(d, d1, exclude_spot)
-        self.mu = mu
-        self.sig = sig
+    def __init__(self, config, exclude_spot=False, **kwargs):
+        super().__init__(config, exclude_spot)
+        self.r = config.r
+        self.mu = config.r
+        self.sig = config.sig
+        self.K = config.K
+        self.T = config.T
 
-    def mu_t(self, t, s):
-        return self.mu * s
-
-    def sig_t(self, t, s):
-        return np.array([self.sig * s])
-
-
-class Y_t(BSDE):
-    """
-    Y_t for American vanilla option
-    """
-    def __init__(self, d2, T, K, mu, sig, **kwargs):
-        super().__init__(d2)
-        self.mu = mu
-        self.sig = sig
-        self.K = K
-        self.T = T
         self.method = kwargs.get('method', 1)
         self.payoff_type = kwargs.get('payoff_type', 'vanilla')
         self.level = kwargs.get('level', 0.01)
         if self.payoff_type == 'barrier':
             self.lower_barrier = kwargs.get('lower_barrier', 20)
             self.upper_barrier = kwargs.get('upper_barrier', 200)
+
+    def mu_t(self, t, s):
+        return self.mu * s
+
+    def sig_t(self, t, s):
+        return np.array([self.sig * s])
 
     def f(self, t, x, y, z):
         eps = self.level * self.K
@@ -122,16 +114,16 @@ class Y_t(BSDE):
 
         if self.method == 1:
             # Check Continuation Region
-            g_val = self.g(t, x)   # d2 x M
-            indicator_ex = np.where(y-g_val <= 0, 1, 0)  # d2 x M
+            g_val = self.g(t, x)  # d2 x M
+            indicator_ex = np.where(y - g_val <= 0, 1, 0)  # d2 x M
 
             # Compute Lg
-            partial_x = np.where(x < a, -1, 0) + np.where((x >= a) & (x <= b), 1/(2*eps)*(x-b), 0)  # d2 x M
-            partial_xx = np.where((x >= a) & (x <= b), 1/(2*eps), 0)  # d2 x M
-            Lg = self.mu * x * partial_x + 0.5 * self.sig**2 * x**2 * partial_xx  # d2 x M
+            partial_x = np.where(x < a, -1, 0) + np.where((x >= a) & (x <= b), 1 / (2 * eps) * (x - b), 0)  # d2 x M
+            partial_xx = np.where((x >= a) & (x <= b), 1 / (2 * eps), 0)  # d2 x M
+            Lg = self.mu * x * partial_x + 0.5 * self.sig ** 2 * x ** 2 * partial_xx  # d2 x M
 
             # Compute (Lg - rg)^-
-            val = Lg - self.mu*g_val
+            val = Lg - self.mu * g_val
             val_minus = -1 * np.where(val <= 0, val, 0)  # d2 x M
 
             # Compute f = -ru + (Lg - rg)^- * I
@@ -141,7 +133,7 @@ class Y_t(BSDE):
         if self.method == 2:
             # Check Continuation Region
             g_val = np.maximum(self.K - x, 0)
-            indicator_ex = np.where(y*np.exp(self.mu*t) - g_val <= 0, 1, 0)  # d2 x M
+            indicator_ex = np.where(y * np.exp(self.mu * t) - g_val <= 0, 1, 0)  # d2 x M
 
             # Compute Lg
             partial_x = np.where(x < a, -1, 0) + np.where((x >= a) & (x <= b), 1 / (2 * eps) * (x - b), 0)  # d2 x M
@@ -159,7 +151,7 @@ class Y_t(BSDE):
             if self.method == 1:
                 return np.maximum(self.K - x, 0)
             if self.method == 2:
-                return np.maximum(self.K - x, 0) * np.exp(-self.mu*T)
+                return np.maximum(self.K - x, 0) * np.exp(-self.mu * T)
 
         elif self.payoff_type == 'barrier':
             return np.maximum(self.K - x, 0) * np.where((x >= self.lower_barrier) & (x <= self.upper_barrier), 1, 0)

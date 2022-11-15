@@ -3,17 +3,19 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 
-class FSDE(ABC):
+class FBSDE(ABC):
     """
     Simulate the forward SDE (1.1.2) with discretization scheme (3.1.2)
+    Simulate the backward BSDE (1.1.1) with discretization scheme (3.1.2)
 
     d          dimension of the Brownian motion
     d1         dimension of X_t
     """
 
-    def __init__(self, d, d1, exclude_spot=False):
-        self.d = d
-        self.d1 = d1
+    def __init__(self, config, exclude_spot=False):
+        self.d = config.d
+        self.d1 = config.d1
+        self.d2 = config.d2
         self.exclude_spot = exclude_spot  # Decide if initial value is included
 
     def draw(self, dZ, x0, dt):
@@ -77,15 +79,6 @@ class FSDE(ABC):
         """
         pass
 
-
-class BSDE(ABC):
-    """
-    Simulate the backward BSDE (1.1.1) with discretization scheme (3.1.2)
-    """
-
-    def __init__(self, d2):
-        self.d2 = d2
-
     @abstractmethod
     def f(self, t, x, y, z):
         """
@@ -110,8 +103,3 @@ class BSDE(ABC):
         :return : g, the final value of Y_T, d2 x M
         """
         pass
-
-
-
-
-

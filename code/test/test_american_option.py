@@ -5,6 +5,7 @@ import american_option
 import european_option
 import LSMC
 import numpy as np
+import config as cf
 
 
 def test_american_put(payoff_type="vanilla", **kwargs):
@@ -14,7 +15,7 @@ def test_american_put(payoff_type="vanilla", **kwargs):
     # Market Parameters
     r = 0.06
     sig = 0.2
-    s0 = np.array([40])
+    s0 = np.array([50])
     T = 1.
     K = 40.
     lower_barrier = kwargs.get('lower_barrier', 20)
@@ -29,22 +30,25 @@ def test_american_put(payoff_type="vanilla", **kwargs):
     d2 = 1
     dZ = LSMC.generate_z_matrix(n_paths=M, n_steps=N, d_bm=d)
 
-    # BSDE - LSMC
-    S_sim = american_option.S_t(mu=r, sig=sig, d=d, d1=d1)
+    # config for option and simulation
+    option = cf.config_option(r=r, sig=sig, K=K, T=T, d1=d1, d2=d2, d=d)
+    config_sim = cf.config_simulation(M=M, N=N, dt=dt, x0=s0, seed=42)
 
     # BSDE Method 1
-    Y_sim = american_option.Y_t(d2=d2, mu=r, sig=sig, K=K, T=T, payoff_type=payoff_type,
-                                lower_barrier=lower_barrier, upper_barrier=upper_barrier, method=1)
-    LSMC_solver = LSMC.LSMC_linear(Y_sim, S_sim, dZ, s0, dt, reg_method='ridge', basis_funcs_type='poly')
+    FBSDE_american = american_option.BS_american_FBSDE(option, payoff_type=payoff_type,
+                                                       lower_barrier=lower_barrier, upper_barrier=upper_barrier,
+                                                       method=1)
+    LSMC_solver = LSMC.LSMC_linear(FBSDE_american, config_sim, reg_method='ridge', basis_funcs_type='poly')
     LSMC_solver.solve()
     print("American {} option pricing by BSDE method 1: {}, with S0 = {}".format(payoff_type, LSMC_solver.y0[0], s0[0]))
 
     # BSDE Method 2
-    Y_sim = american_option.Y_t(d2=d2, mu=r, sig=sig, K=K, T=T, payoff_type=payoff_type,
-                                lower_barrier=lower_barrier, upper_barrier=upper_barrier, method=2)
-    LSMC_solver = LSMC.LSMC_linear(Y_sim, S_sim, dZ, s0, dt, reg_method=None, basis_funcs_type='poly')
+    FBSDE_american = american_option.BS_american_FBSDE(option, payoff_type=payoff_type,
+                                                       lower_barrier=lower_barrier, upper_barrier=upper_barrier,
+                                                       method=2)
+    LSMC_solver = LSMC.LSMC_linear(FBSDE_american, config_sim, reg_method='ridge', basis_funcs_type='poly')
     LSMC_solver.solve()
-    print("American {} option pricing by BSDE method 2: {}, with S0 = {}".format(payoff_type, LSMC_solver.y0[0], s0[0]))
+    print("American {} option pricing by BSDE method 1: {}, with S0 = {}".format(payoff_type, LSMC_solver.y0[0], s0[0]))
 
     # PDE - variational equation
     S_min = 0.0

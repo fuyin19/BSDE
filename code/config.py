@@ -1,6 +1,7 @@
 
 class config_simulation(object):
-    def __init__(self, N, M, dt, seed=42):
+    def __init__(self, x0, N, M, dt, seed=42):
+        self.x0 = x0
         self.N = N
         self.M = M
         self.dt = dt
@@ -20,4 +21,13 @@ class config_option(config_FBSDE):
         self.r = r
         self.sig = sig
         self.K = K
+        self.T = T
+
+
+class config_HJB_liquidation1(config_FBSDE):
+    def __init__(self, sig_s, k, eps, T, d, d1, d2):
+        super(config_HJB_liquidation1, self).__init__(d, d1, d2)
+        self.sig_s = sig_s
+        self.k = k
+        self.eps = eps
         self.T = T

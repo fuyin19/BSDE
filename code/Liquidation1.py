@@ -3,14 +3,16 @@ from FBSDE import *
 
 
 # Implement the FBSDE
-class X_t(FSDE):
+class HJB_liquidation1_FBSDE(FBSDE):
     """
     X_t for Liquidation without penalties
     """
-    def __init__(self, sig_s, eps, exclude_spot=False):
-        super().__init__(d=2, d1=2, exclude_spot=exclude_spot)
-        self.sig_s = sig_s
-        self.eps = eps
+    def __init__(self, config, exclude_spot=False):
+        super().__init__(config, exclude_spot=exclude_spot)
+        self.sig_s = config.sig_s
+        self.eps = config.eps
+        self.k = config.k
+        self.T = config.T
 
     def mu_t(self, t, x):
         return np.zeros(shape=x.shape)
@@ -19,16 +21,6 @@ class X_t(FSDE):
         sig = np.array([[self.sig_s, 0], [0, self.eps]]).reshape((2, 2, 1))  # 2 x 2
         return np.repeat(sig, x.shape[1], axis=2)                            # 2 x 2 x M
            #[:, :, np.newaxis]
-
-
-class Y_t(BSDE):
-    """
-    Y_t for Liquidation without penalties
-    """
-    def __init__(self, eps, k):
-        super().__init__(d2=1)
-        self.eps = eps
-        self.k = k
 
     def f(self, t, x, y, z):
         """

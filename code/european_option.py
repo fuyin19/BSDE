@@ -60,33 +60,24 @@ def BS_EuroPut(S, T, K, r, q, sig):
 
 
 # Implement the FBSDE
-class S_t(FSDE):
+class BS_FBSDE(FBSDE):
     """
-    X_t for European vanilla option
+    FBSDE representation of Black-Scholes PDE for European vanilla option
     """
-    def __init__(self, mu, sig, d, d1, exclude_spot=False):
-        super().__init__(d, d1, exclude_spot)
-        self.mu = mu
-        self.sig = sig
+    def __init__(self, config, exclude_spot=False, **kwargs):
+        super().__init__(config, exclude_spot)
+        self.mu = config.r
+        self.sig = config.sig
+        self.r = config.r
+        self.K = config.K
+        self.T = config.T
+        self.method = kwargs.get('method', 1)
 
     def mu_t(self, t, s):
         return self.mu * s
 
     def sig_t(self, t, s):
         return np.array([self.sig * s])
-
-
-class Y_t(BSDE):
-    """
-    Y_t for European vanilla option
-    """
-    def __init__(self, mu, r, sig, d2, K, **kwargs):
-        super().__init__(d2)
-        self.mu = mu
-        self.r = r
-        self.sig = sig
-        self.K = K
-        self.method = kwargs.get('method', 1)
 
     def f(self, t, x, y, z):
         if self.method == 1:
@@ -96,4 +87,3 @@ class Y_t(BSDE):
 
     def g(self, T, x, level=0.01):
         return np.maximum(-self.K + x, 0)
-
