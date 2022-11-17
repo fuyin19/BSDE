@@ -13,6 +13,8 @@ class FBSDE(ABC):
     """
 
     def __init__(self, config, exclude_spot=False):
+        self.config = config
+
         self.d = config.d
         self.d1 = config.d1
         self.d2 = config.d2
