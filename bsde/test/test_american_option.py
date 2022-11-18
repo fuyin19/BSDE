@@ -1,10 +1,10 @@
 # import sys
-# sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/code')
+# sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/bsde')
 
-import code.config.config as cf
+import bsde.config.config as cf
 import numpy as np
-from code.dynamics import american_option, european_option
-from code.LSMC import LSMC
+from bsde.dynamics import american_option, european_option
+from bsde.LSMC import LSMC
 
 
 def test_american_put(payoff_type="vanilla", **kwargs):

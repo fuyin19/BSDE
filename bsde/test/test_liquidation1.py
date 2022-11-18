@@ -1,10 +1,10 @@
 # import sys
-# sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/code')
+# sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/bsde')
 
 import numpy as np
-import code.config.config as cf
-from code.LSMC import LSMC
-from code.dynamics.Liquidation1 import HJB_liquidation1_FBSDE
+import bsde.config.config as cf
+from bsde.LSMC import LSMC
+from bsde.dynamics.Liquidation1 import HJB_liquidation1_FBSDE
 
 
 def test_liquidation1():

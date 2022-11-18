@@ -1,5 +1,5 @@
 import numpy as np
-from code.dynamics.FBSDE import FBSDE
+from bsde.dynamics.FBSDE import FBSDE
 
 
 def MC_EuroCall(S_0, K, T, r, sigma, N, M, seed=42):

@@ -1,10 +1,10 @@
 #import sys
-#sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/code')
+#sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/bsde')
 
-import code.config.config as cf
+import bsde.config.config as cf
 import numpy as np
-import code.dynamics.european_option as eu
-from code.LSMC.LSMC_engine import LSMC_engine
+import bsde.dynamics.european_option as eu
+from bsde.LSMC.LSMC_engine import LSMC_engine
 
 
 def test_engine():

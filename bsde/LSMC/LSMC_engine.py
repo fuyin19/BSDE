@@ -1,5 +1,5 @@
 import numpy as np
-from code.LSMC import LSMC
+from bsde.LSMC import LSMC
 
 class LSMC_engine(object):
     def __init__(self, FBSDEs, configs_sim, **kwargs):

@@ -1,7 +1,7 @@
 # Implement the dynamics
 
 import numpy as np
-from code.dynamics.FBSDE import FBSDE
+from bsde.dynamics.FBSDE import FBSDE
 from scipy import sparse
 import scipy.sparse.linalg.dsolve as linsolve
 
