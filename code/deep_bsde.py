@@ -6,10 +6,18 @@ class DeepBSDESolver(object):
     """
     The Deep BSDE method in the paper [EHJ17] and [HJE18]
     """
-    def __init__(self, FBSDE, config_sim):
+    def __init__(self, FBSDE, config_sim, config_NN):
         self.FBSDE = FBSDE
         self.config_sim = config_sim
-        self.model = GlobalDNN(FBSDE=FBSDE, config_sim=config_sim)
+        self.model = GlobalDNN(FBSDE=FBSDE, config_sim=config_sim, config_NN=config_NN)
+        self.y0 = self.model.y_0
+
+        self.optimizer = tf.keras.optimizers.Adam(
+            learning_rate=tf.keras.optimizers.schedules.PiecewiseConstantDecay(self.config_NN.lr_boundaries,
+                                                                               self.config_NN.lr_values),
+            epsilon=1e-8)
+
+    def train(self):
 
 
 class GlobalDNN(tf.keras.Model):
@@ -27,35 +35,41 @@ class GlobalDNN(tf.keras.Model):
                                )
         self.z_0 = tf.Variable(np.random.uniform(low=-.1, high=.1,
                                                  size=[self.FBSDE.d2, self.FBSDE.d])
-                               )
+                               )  # 1 x d
         self.subnet = [FeedForwardNN(FBSDE.config, config_NN) for i in range(self.config_sim.N-1)]
 
     def call(self, dW, x, training):
         """
+        Forward pass of the global Neural Net
 
-        :param dW: M x N x d
-        :param x:
-        :param training:
-        :return:
+        :param dW: BM incre., M x N x d
+        :param x: X_path, M x N x d
+        :param training: ?
+        :return: y_T, the final value of y, d2
         """
+        # y, M x 1
+        # z, M x d
+        # x_t, M x d
+        # dW_t, M x d
 
         ts = np.arange(0, self.config_sim.N) * self.config_sim.dt
-        all_one_vec_y = tf.ones(shape=[self.config_sim.M, self.FBSDE.d2], dtype=self.config_subnet.dtype)
-        all_one_vec_z = tf.ones(shape=[self.config_sim.M, self.FBSDE.d2, self.FBSDE.d], dtype=self.config_subnet.dtype)
+        all_one_vec = tf.ones(shape=[self.config_sim.M, self.FBSDE.d2], dtype=self.config_subnet.dtype)  # M x 1
 
-        y = all_one_vec_y * self.y_0  # M x d2
-        z = all_one_vec_z * self.z_0  # M x d2 x d
+        y = all_one_vec * self.y_0
+        z = tf.matmul(all_one_vec, self.z_init)
 
         for t in range(0, self.config_sim.N - 1):
-            x_t = x[:, t, :]          # M x d1
-            dW_t = dW[:, t, :, None]  # M x d x 1
+            x_t = x[:, t, :]
+            dW_t = dW[:, t, :]
 
-            y = y - self.config_sim.dt * self.FBSDE.f(ts[t], x_t, y, z) + tf.matmul(z, dW_t)[:, :, 0]
+            y = y - self.config_sim.dt * self.FBSDE.f(ts[t], x_t, y, z) \
+                + tf.reduce_sum(z * dW_t, 1, keepdims=True)
+
             z = self.subnet[t](x[:, t+1, :], training) / self.FBSDE.d
 
         # terminal time
-        dW_T = dW[:, -1, :, None]
-        y = y - self.config_sim.dt * self.FBSDE.f(ts[-1], x[:, -2, :], y, z) + tf.matmul(z, dW_T)[:, :, 0]
+        y = y - self.config_sim.dt * self.FBSDE.f(ts[-1], x[:, -2, :], y, z) \
+            + tf.reduce_sum(z * dW[:, -1, :], 1, keepdims=True)
 
         return y
 

@@ -2,24 +2,39 @@ import sys
 sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/code')
 
 import numpy as np
+import config as cf
 import LSMC_engine
+import european_option as eu
 
 
 def test_engine():
     # Market Parameters
+    r = 0.1
+    sigs = [0.1*i for i in range(1, 2)]
     s0 = np.array([40])
     T = 1
+    K = 30
 
     # Simulation parameters
-    M = 2 ** 14
-    dt = 1 / 252.
+    Ms = [int(2 ** i) for i in range(4, 19)]
+    dt = (1 / 252.)
+    N = int(T / dt)
     d = 1
     d1 = 1
     d2 = 1
 
-    LSMC_engine_european = LSMC_engine.LSMC_engine(d1=d1, d2=d2, d=d, M=M, dt=dt, T=T, x0=s0, task='pricing', r=[0.1, 0.2], sig=[0.3, 0.5], K=[40, 50])
-    LSMC_engine_european.run()
+    # configs
+    configs_options = [cf.config_option(r=r, sig=sig, K=K, T=T, d=d, d1=d1, d2=d2) for sig in sigs]
+    configs_sim = [cf.config_simulation(N=N, M=M, dt=dt, seed=42, x0=s0) for M in Ms]
 
+    # dynamics
+    FBSDEs = [eu.BS_FBSDE(cfg) for cfg in configs_options]
+
+    # Run the engine
+    engine = LSMC_engine.LSMC_engine(FBSDEs, configs_sim)
+    engine.run()
+
+    print(engine.res)
 
 def main():
     test_engine()

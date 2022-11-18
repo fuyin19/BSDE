@@ -44,11 +44,11 @@ def test_european_call():
     LSMC_solver.solve()
     print('BSDE-linear: {}'.format(LSMC_solver.y0[0]))
 
-    # Neural Net
+    # Neural Net -- takes too long to run
     if False:
-        LSMC_solver = LSMC.LSMC_neural_net(Y_sim, S_sim, dZ, s0, dt,
-                                           model_params={'hidden_layer_sizes': (3,), 'max_iter': 5000,
-                                                         'activation': 'logistic'},
+        LSMC_solver = LSMC.LSMC_neural_net(BS_FBSDE, config_sim,
+                                           model_params={'hidden_layer_sizes': (1,), 'max_iter': 5000,
+                                                         'activation': 'relu'},
                                            reg_method=None, basis_funcs_type='poly')
         LSMC_solver.solve()
         print('BSDE-Neural Net: {}'.format(LSMC_solver.y0[0]))
