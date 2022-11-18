@@ -1,4 +1,5 @@
-from FBSDE import *
+import numpy as np
+from code.dynamics.FBSDE import FBSDE
 
 
 def MC_EuroCall(S_0, K, T, r, sigma, N, M, seed=42):
@@ -59,10 +60,10 @@ def BS_EuroPut(S, T, K, r, q, sig):
     return call - S + discount * K
 
 
-# Implement the FBSDE
+# Implement the dynamics
 class BS_FBSDE(FBSDE):
     """
-    FBSDE representation of Black-Scholes PDE for European vanilla option
+    dynamics representation of Black-Scholes PDE for European vanilla option
     """
     def __init__(self, config, exclude_spot=False, **kwargs):
         super().__init__(config, exclude_spot)

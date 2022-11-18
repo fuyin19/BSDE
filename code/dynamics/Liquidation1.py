@@ -1,8 +1,8 @@
 import numpy as np
-from FBSDE import *
+from code.dynamics.FBSDE import FBSDE
 
 
-# Implement the FBSDE
+# Implement the dynamics
 class HJB_liquidation1_FBSDE(FBSDE):
     """
     X_t for Liquidation without penalties

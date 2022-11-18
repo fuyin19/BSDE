@@ -1,10 +1,10 @@
-import sys
-sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/code')
+#import sys
+#sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/code')
 
+import code.config.config as cf
 import numpy as np
-import config as cf
-import LSMC_engine
-import european_option as eu
+import code.dynamics.european_option as eu
+from code.LSMC.LSMC_engine import LSMC_engine
 
 
 def test_engine():
@@ -31,7 +31,7 @@ def test_engine():
     FBSDEs = [eu.BS_FBSDE(cfg) for cfg in configs_options]
 
     # Run the engine
-    engine = LSMC_engine.LSMC_engine(FBSDEs, configs_sim)
+    engine = LSMC_engine(FBSDEs, configs_sim)
     engine.run()
 
     print(engine.res)

@@ -1,16 +1,15 @@
-import sys
-sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/code')
+# import sys
+# sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/code')
 
-import american_option
-import european_option
-import LSMC
+import code.config.config as cf
 import numpy as np
-import config as cf
+from code.dynamics import american_option, european_option
+from code.LSMC import LSMC
 
 
 def test_american_put(payoff_type="vanilla", **kwargs):
     """
-    Test the american put option price computed by FBSDE
+    Test the american put option price computed by dynamics
     """
     # Market Parameters
     r = 0.06
@@ -24,7 +23,7 @@ def test_american_put(payoff_type="vanilla", **kwargs):
     # Simulation parameters
     M = 2 ** 16
     dt = (1 / 252.)
-    N = int(T/dt)
+    N = int(T / dt)
     d = 1
     d1 = 1
     d2 = 1
@@ -56,20 +55,20 @@ def test_american_put(payoff_type="vanilla", **kwargs):
 
     nt = 5000
     ns = 399
-    S_s = np.linspace(S_min, S_max, ns+2)
-    t_s = np.linspace(0, T, nt+1)
+    S_s = np.linspace(S_min, S_max, ns + 2)
+    t_s = np.linspace(0, T, nt + 1)
     final_payoff = None
     B_upper = None
     B_lower = None
 
     if payoff_type == 'vanilla':
         final_payoff = np.maximum(K - S_s, 0)
-        B_upper = 0*t_s
-        B_lower = np.exp(-r*t_s) * K
+        B_upper = 0 * t_s
+        B_lower = np.exp(-r * t_s) * K
     elif payoff_type == 'barrier':
         final_payoff = np.maximum(K - S_s, 0) * np.where((S_s >= lower_barrier) & (S_s <= upper_barrier), 1, 0)
-        B_upper = 0*t_s
-        B_lower = 0*t_s
+        B_upper = 0 * t_s
+        B_lower = 0 * t_s
 
     BS_PDE_solver = american_option.BS_FDM_implicit(r, sig, T, S_min, S_max, B_lower, B_upper,
                                                     final_payoff[1:-1], nt, ns)
@@ -77,9 +76,9 @@ def test_american_put(payoff_type="vanilla", **kwargs):
     u_implicit = BS_PDE_solver.solve()
     n_row = len(u_implicit[:, 1])
 
-    u = u_implicit[n_row-1, :]
-    s0_idx = int(2*s0[0]-1)
-    print("American {} option pricing by PDE: {}, with S0 = {}".format(payoff_type, u[s0_idx], S_s[s0_idx+1]))
+    u = u_implicit[n_row - 1, :]
+    s0_idx = int(2 * s0[0] - 1)
+    print("American {} option pricing by PDE: {}, with S0 = {}".format(payoff_type, u[s0_idx], S_s[s0_idx + 1]))
 
     if r == 0 and payoff_type == 'vanilla':
         BS_European_put = european_option.BS_EuroPut(S=s0[0], T=T, K=K, r=r, q=0, sig=sig)
@@ -93,4 +92,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

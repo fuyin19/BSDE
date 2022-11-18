@@ -34,7 +34,7 @@ def generate_z_matrix(n_paths, n_steps, d_bm, seed=42):
 
 class LSMC(ABC):
     """
-    Least Square Monte Carlo Method for FBSDE
+    Least Square Monte Carlo Method for dynamics
     """
 
     def __init__(self, FBSDE, config, model_params={}, basis_funcs=None, **kwargs):
@@ -49,7 +49,7 @@ class LSMC(ABC):
         :param kwargs: additional arguments, i.e. predefined basis function type
         """
 
-        # Config for FBSDE and Simulation
+        # Config for dynamics and Simulation
         self.N, self.M, self.dt, self.x0, self.seed = config.N, config.M, config.dt, config.x0, config.seed
         self.d, self.d1, self.d2, self.T = FBSDE.d, FBSDE.d1, FBSDE.d2, FBSDE.T
 
@@ -57,7 +57,7 @@ class LSMC(ABC):
         self.FBSDE = FBSDE
         self.dZ = generate_z_matrix(n_paths=self.M, n_steps=self.N, d_bm=self.d, seed=self.seed)  # BM increments
 
-        # Initialize path for FBSDE
+        # Initialize path for dynamics
         self.y0 = 0                                                           # Initial value of Y_t
         self.z0 = 0                                                           # Initial value of Z_t
         self.X_path = self.FBSDE.draw(self.dZ, self.x0, self.dt)              # X_t path, N+1 x d x M
@@ -181,7 +181,7 @@ class LSMC(ABC):
 
 class LSMC_linear(LSMC):
     """
-    Least Square Monte-Carlo method for solving FBSDE, where Y_t and Z_t are approximated by linear combination
+    Least Square Monte-Carlo method for solving dynamics, where Y_t and Z_t are approximated by linear combination
     of basis functions of X_t
     """
     def __init__(self, FBSDE, config, model_params={}, reg_method=None, basis_funcs=None, **kwargs):
@@ -228,7 +228,7 @@ class LSMC_linear(LSMC):
 
 class LSMC_svm(LSMC):
     """
-    Least Square Monte-Carlo method for solving FBSDE, where Y_t and Z_t are approximated by linear combination
+    Least Square Monte-Carlo method for solving dynamics, where Y_t and Z_t are approximated by linear combination
     of basis functions of X_t
     """
     def __init__(self, FBSDE, config, model_params={}, basis_funcs=None, **kwargs):

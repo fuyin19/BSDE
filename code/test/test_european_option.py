@@ -1,16 +1,15 @@
-import sys
+# import sys
+# sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/code')
 
-sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/code')
-
-import european_option
-import LSMC
+import code.config.config as cf
 import numpy as np
-import config as cf
+from code.dynamics import european_option
+from code.LSMC import LSMC
 
 
 def test_european_call():
     """
-    Test the European call option price computed by FBSDE
+    Test the European call option price computed by dynamics
     """
     # Market Parameters
     mu = 0.1
