@@ -1,23 +1,68 @@
 import numpy as np
+import logging
 import tensorflow as tf
+import time
+from bsde.LSMC.LSMC import generate_z_matrix
+
+DELTA_CLIP = 50.0
 
 
 class DeepBSDESolver(object):
     """
     The Deep BSDE method in the paper [EHJ17] and [HJE18]
     """
-    def __init__(self, FBSDE, config_sim, config_NN):
+    def __init__(self, FBSDE, config_sim, config_NN, config_deepBSDE):
         self.FBSDE = FBSDE
         self.config_sim = config_sim
+        self.config_deepBSDE = config_deepBSDE
         self.model = GlobalDNN(FBSDE=FBSDE, config_sim=config_sim, config_NN=config_NN)
-        self.y0 = self.model.y_0
+        self.y_0 = self.model.y_0
 
         self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=tf.keras.optimizers.schedules.PiecewiseConstantDecay(self.config_NN.lr_boundaries,
                                                                                self.config_NN.lr_values),
             epsilon=1e-8)
 
-    def train(self):
+    def train_n_report(self):
+        start_time = time.time()
+        valid_data = self.FBSDE.draw(dW=np.sqrt(self.config_sim.dt) * generate_z_matrix(n_steps=self.config_sim.N,
+                                                                                        n_paths=self.config_deepBSDE.valid_size,
+                                                                                        d_bm=self.FBSDE.d),
+                                     x0=self.config_sim.x0,
+                                     dt=self.config_sim.dt), self.FBSDE.dW
+
+        # begin sgd iteration
+        for step in range(self.config_deepBSDE.num_iterations + 1):
+            if step % self.config_deepBSDE.logging_frequency == 0:
+                loss_val = self.loss(valid_data, training=False).numpy()
+                y_0 = self.y_0.numpy()[0]
+                elapsed_time = time.time() - start_time
+                if self.config_deepBSDE.verbose:
+                    logging.info("step: %5u,    loss: %.4e, Y0: %.4e,   elapsed time: %3u" % (
+                        step, loss_val, y_0, elapsed_time))
+            self.train_step(self.FBSDE.sample(self.config_deepBSDE.batch_size))
+
+    def loss(self, FSDE_path, training):
+        dW, x = FSDE_path
+        y_terminal = self.model(dW, x, training)
+        delta = y_terminal - self.FBSDE.g(self.FBSDE.T, x[:, :, -1])
+        # use linear approximation outside the clipped range
+        loss = tf.reduce_mean(tf.where(tf.abs(delta) < DELTA_CLIP, tf.square(delta),
+                                       2 * DELTA_CLIP * tf.abs(delta) - DELTA_CLIP ** 2))
+
+        return loss
+
+    def gradient(self, FSDE_path, training):
+        with tf.GradientTape(persistent=True) as tape:
+            loss_val = self.loss(FSDE_path, training)
+        grad = tape.gradient(loss_val, self.model.trainable_variables)
+        del tape
+        return grad
+
+    @tf.function
+    def train(self, train_data):
+        grad = self.gradient(train_data, training=True)
+        self.optimizer.apply_gradients(zip(grad, self.model.trainable_variables))
 
 
 class GlobalDNN(tf.keras.Model):

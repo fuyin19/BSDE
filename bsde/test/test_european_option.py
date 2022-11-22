@@ -23,7 +23,7 @@ def test_european_call():
     K = 30
 
     # Simulation parameters
-    M = 2 ** 11
+    M = 2 ** 14
     dt = (1 / 252.)
     N = int(T / dt)
     d = 1
@@ -53,10 +53,11 @@ def test_european_call():
         print('BSDE-LSMC-Neural Net: {}'.format(LSMC_solver.y0[0]))
 
     # SVM
-    config_model = config_svm(model_params={'kernel': 'rbf'})
-    LSMC_solver = LSMC.LSMC_svm(BS_FBSDE, config_sim, config_model, basis_funcs_type='trig')
-    LSMC_solver.solve()
-    print('BSDE-LSMC-SVM: {}'.format(LSMC_solver.y0[0]))
+    if False:
+        config_model = config_svm(model_params={'kernel': 'rbf'})
+        LSMC_solver = LSMC.LSMC_svm(BS_FBSDE, config_sim, config_model, basis_funcs_type='trig')
+        LSMC_solver.solve()
+        print('BSDE-LSMC-SVM: {}'.format(LSMC_solver.y0[0]))
 
 
 def main():

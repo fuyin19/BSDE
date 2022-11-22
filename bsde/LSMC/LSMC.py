@@ -60,7 +60,7 @@ class LSMC(ABC):
         # Initialize path for dynamics
         self.y0 = 0                                                           # Initial value of Y_t
         self.z0 = 0                                                           # Initial value of Z_t
-        self.X_path = self.FBSDE.draw(self.dZ, self.x0, self.dt)              # X_t path, N+1 x d x M
+        self.X_path = self.FBSDE.draw(np.sqrt(self.dt)*self.dZ, self.x0, self.dt)              # X_t path, N+1 x d x M
         self.Y_path = np.zeros(shape=(self.N, self.d2, self.M))               # Y_t path, N x d2 x M
         self.Z_path = np.zeros(shape=(self.N - 1, self.d2, self.d, self.M))   # Z_t path, N-1 x d2 x d x M
 
