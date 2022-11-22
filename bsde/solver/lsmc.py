@@ -32,14 +32,14 @@ def generate_z_matrix(n_paths, n_steps, d_bm, seed=42):
     return Z_matrix
 
 
-class LSMC(ABC):
+class LSMCSolver(ABC):
     """
     Least Square Monte Carlo Method for dynamics
     """
 
-    def __init__(self, FBSDE, config_sim, config_LSMC, **kwargs):
+    def __init__(self, FBSDE, config, **kwargs):
         """
-        Initialize the LSMC solver
+        Initialize the lsmc solver
 
         :param FBSDE: the forward and backward dynamics
         :param config: configuration of simulation
@@ -50,7 +50,7 @@ class LSMC(ABC):
         """
 
         # Config for dynamics and Simulation
-        self.N, self.M, self.dt, self.x0, self.seed = config_sim.N, config_sim.M, config_sim.dt, config_sim.x0, config_sim.seed
+        self.N, self.M, self.dt, self.x0, self.seed = config.N, config.M, config.dt, config.x0, config.seed
         self.d, self.d1, self.d2, self.T = FBSDE.d, FBSDE.d1, FBSDE.d2, FBSDE.T
 
         # Dynamics
@@ -65,10 +65,10 @@ class LSMC(ABC):
         self.Z_path = np.zeros(shape=(self.N - 1, self.d2, self.d, self.M))   # Z_t path, N-1 x d2 x d x M
 
         # Regression Model parameters
-        self.model_params = config_LSMC.model_params
+        self.model_params = config.model_params
 
         # Basis Functions
-        basis_funcs = config_LSMC.basis_funcs
+        basis_funcs = config.basis_funcs
 
         if not basis_funcs:
             basis_funcs_type = kwargs.get('basis_funcs_type', 'poly')
@@ -181,15 +181,16 @@ class LSMC(ABC):
         self.y0 = np.mean(self.est_y(0, self.x0, y, self.z0), axis=1)  # d2, d2 x M along M
 
 
-class LSMC_linear(LSMC):
+class LSMCLinear(LSMCSolver):
     """
     Least Square Monte-Carlo method for solving dynamics, where Y_t and Z_t are approximated by linear combination
     of basis functions of X_t
     """
-    def __init__(self, FBSDE, config_sim, config_linear, **kwargs):
-        super().__init__(FBSDE, config_sim, config_linear, **kwargs)
+    def __init__(self, FBSDE, config, **kwargs):
+        super().__init__(FBSDE, config, **kwargs)
 
-        reg_method = config_linear.reg_method
+        reg_method = config.kwargs.get('reg_method', None)
+
         self.alphas = np.zeros(shape=(self.N - 1, self.n_features, self.d2, self.d))  # All alphas, N-1 x kn x d2 x d
         self.betas = np.zeros(shape=(self.N - 1, self.n_features, self.d2))           # All betas, N-1 x kn x d2
 
@@ -229,13 +230,13 @@ class LSMC_linear(LSMC):
         return z, y
 
 
-class LSMC_svm(LSMC):
+class LSMCSVR(LSMCSolver):
     """
     Least Square Monte-Carlo method for solving dynamics, where Y_t and Z_t are approximated by linear combination
     of basis functions of X_t
     """
-    def __init__(self, FBSDE, config_sim, config_svm, **kwargs):
-        super().__init__(FBSDE, config_sim, config_svm, **kwargs)
+    def __init__(self, FBSDE, config, **kwargs):
+        super().__init__(FBSDE, config, **kwargs)
 
     def fit(self, n, x, y):
         t_n = n * self.dt            # Current time at n
@@ -265,13 +266,13 @@ class LSMC_svm(LSMC):
         return z, y
 
 
-class LSMC_neural_net(LSMC):
+class LSMCNeuralNet(LSMCSolver):
     """
     Y_t and Z_t are approximated by Neural Networks
     """
 
-    def __init__(self, FBSDE, config_sim, config_NN, **kwargs):
-        super().__init__(FBSDE, config_sim, config_NN, **kwargs)
+    def __init__(self, FBSDE, config, **kwargs):
+        super().__init__(FBSDE, config, **kwargs)
         self.y_func = []
         self.z_func = []
 

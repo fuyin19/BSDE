@@ -2,14 +2,11 @@
 #sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/bsde')
 
 import numpy as np
-
-from bsde.config.FBSDE import config_option
-from bsde.config.simulation import config_simulation
-from bsde.config.LSMC import config_linear, config_svm, config_NN
-
 import bsde.dynamics.european_option as eu
-from bsde.LSMC.LSMC import LSMC_linear
-from bsde.LSMC.LSMC_engine import LSMC_engine
+
+from bsde.config import ConfigOption, ConfigLSMC
+from bsde.solver.lsmc import LSMCLinear
+from bsde.engine import Engine
 
 
 def test_engine():
@@ -29,15 +26,14 @@ def test_engine():
     d2 = 1
 
     # configs
-    configs_options = [config_option(r=r, sig=sig, K=K, T=T, d=d, d1=d1, d2=d2) for sig in sigs]
-    configs_sim = [config_simulation(N=N, M=M, dt=dt, seed=42, x0=s0) for M in Ms]
-    config_model = config_linear(model_params={})
+    configs_option = [ConfigOption(r=r, sig=sig, K=K, T=T, d=d, d1=d1, d2=d2) for sig in sigs]
+    configs_LSMC_solver = [ConfigLSMC(N=N, M=M, dt=dt, seed=42, x0=s0, model_params={}, reg_method=None) for M in Ms]
 
     # dynamics
-    FBSDEs = [eu.BS_FBSDE(cfg) for cfg in configs_options]
+    FBSDEs = [eu.BS_FBSDE(cfg) for cfg in configs_option]
 
     # Run the engine
-    engine = LSMC_engine(FBSDEs, configs_sim, config_model, LSMC_linear)
+    engine = Engine(FBSDEs, configs_LSMC_solver, LSMCLinear)
     engine.run()
 
     print(engine.res)

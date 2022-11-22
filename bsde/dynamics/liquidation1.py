@@ -1,5 +1,5 @@
 import numpy as np
-from bsde.dynamics.FBSDE import FBSDE
+from bsde.dynamics.fbsde import FBSDE
 
 
 # Implement the dynamics

@@ -2,7 +2,7 @@ import numpy as np
 import logging
 import tensorflow as tf
 import time
-from bsde.LSMC.LSMC import generate_z_matrix
+from bsde.solver.lsmc import generate_z_matrix
 
 DELTA_CLIP = 50.0
 

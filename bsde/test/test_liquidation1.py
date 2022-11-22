@@ -2,9 +2,9 @@
 # sys.path.insert(0, '/Users/finn/Desktop/Capstone-BSDE/files/bsde')
 
 import numpy as np
-import bsde.config.config as cf
-from bsde.LSMC import LSMC
-from bsde.dynamics.Liquidation1 import HJB_liquidation1_FBSDE
+from bsde.config import ConfigHJB1, ConfigLSMC
+from bsde.solver.lsmc import LSMCLinear
+from bsde.dynamics.liquidation1 import HJB_liquidation1_FBSDE
 
 
 def test_liquidation1():
@@ -27,13 +27,13 @@ def test_liquidation1():
     sig_s = 0.5
     k = 2
 
-    # config
-    config_liquidation1 = cf.config_HJB_liquidation1(eps=epsilon, sig_s=sig_s, k=k, T=T, d=d, d1=d1, d2=d2)
-    config_sim = cf.config_simulation(M=M, N=N, dt=dt, seed=42, x0=x0)
+    # configg
+    config_liquidation1 = ConfigHJB1(eps=epsilon, sig_s=sig_s, k=k, T=T, d=d, d1=d1, d2=d2)
+    config_sim = ConfigLSMC(M=M, N=N, dt=dt, seed=42, x0=x0)
 
     # simulation
     FBSDE = HJB_liquidation1_FBSDE(config_liquidation1)
-    LSMC_solver = LSMC.LSMC_linear(FBSDE, config_sim, basis_funcs_type='trig')
+    LSMC_solver = LSMCLinear(FBSDE, config_sim, basis_funcs_type='trig')
     LSMC_solver.solve()
 
 

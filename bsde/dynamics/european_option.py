@@ -1,8 +1,8 @@
 import numpy as np
-from bsde.dynamics.FBSDE import FBSDE
+from bsde.dynamics.fbsde import FBSDE
 
 
-def MC_EuroCall(S_0, K, T, r, sigma, N, M, seed=42):
+def MC_EuroCall(S_0, K, T, r, sigma, M, N, seed=42):
     """
     Monte Carlo Simulation for pricing a European Call option.
 
@@ -12,23 +12,23 @@ def MC_EuroCall(S_0, K, T, r, sigma, N, M, seed=42):
         T: time to  maturity in years
         r: riskless interest rate
         sigma: volatility of the stock price
-        N: the number of iterations to run
-        M: the number of time-steps
+        M: the number of iterations to run
+        N: the number of time-steps
 
     Output: Prints the European Call Value
 
     RRL March 23, 2021: adapted from Hilpisch "Python for Finance"
     """
     np.random.seed(seed)
-    dt = T / M
+    dt = T / N
 
-    # Simulating N paths with M time steps
+    # Simulating M paths with N time steps
     S = S_0 * np.exp(np.cumsum((r - 0.5 * sigma ** 2) * dt
                                + sigma * np.sqrt(dt)
-                               * np.random.standard_normal((M + 1, N)), axis=0))
+                               * np.random.standard_normal((N + 1, M)), axis=0))
 
     # Calculating the Monte Carlo estimator
-    C0 = np.exp(-r * T) * sum(np.maximum(S[-1] - K, 0)) / N
+    C0 = np.exp(-r * T) * sum(np.maximum(S[-1] - K, 0)) / M
 
     return C0
 
