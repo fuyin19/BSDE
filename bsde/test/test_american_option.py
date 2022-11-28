@@ -13,8 +13,8 @@ def test_american_put(payoff_type="vanilla", **kwargs):
     Test the american put option price computed by dynamics
     """
     # Market Parameters
-    r = 0.06
-    sig = 0.8
+    r = 0.6
+    sig = 0.4
     s0 = np.array([40])
     T = 1.
     K = 40.
@@ -48,10 +48,10 @@ def test_american_put(payoff_type="vanilla", **kwargs):
 
     # PDE - variational equation
     S_min = 0.0
-    S_max = 200
+    S_max = 700
 
     nt = 5000
-    ns = 399
+    ns = 1399
     S_s = np.linspace(S_min, S_max, ns + 2)
     t_s = np.linspace(0, T, nt + 1)
     final_payoff = None

@@ -1,5 +1,79 @@
 import numpy as np
 from bsde.dynamics.fbsde import FBSDE
+from scipy import sparse
+import scipy.sparse.linalg.dsolve as linsolve
+
+
+class BS_FDM_implicit:
+    def __init__(self,
+                 r,
+                 sigma,
+                 maturity,
+                 Smin,
+                 Smax,
+                 Fl,
+                 Fu,
+                 payoff,
+                 nt,
+                 ns):
+        self.r = r
+        self.sigma = sigma
+        self.maturity = maturity
+
+        self.Smin = Smin
+        self.Smax = Smax
+        self.Fl = Fl
+        self.Fu = Fu
+
+        self.nt = nt
+        self.ns = ns
+
+        self.dt = float(maturity) / nt
+        self.dx = float(Smax - Smin) / (ns + 1)
+        self.xs = Smin / self.dx
+
+        self.u = np.empty((nt + 1, ns))
+        self.u[0, :] = payoff
+
+        # Building Coefficient matrix:
+        A = sparse.lil_matrix((self.ns, self.ns))
+
+        for j in range(0, self.ns):
+            xd = j + 1 + self.xs
+            sx = self.sigma * xd
+            sxsq = sx * sx
+
+            dtmp1 = self.dt * sxsq
+            dtmp2 = self.dt * self.r
+            A[j, j] = 1.0 + dtmp1 + dtmp2
+
+            dtmp1 = -0.5 * dtmp1
+            dtmp2 = -0.5 * dtmp2 * xd
+            if j > 0:
+                A[j, j - 1] = dtmp1 - dtmp2
+            if j < self.ns - 1:
+                A[j, j + 1] = dtmp1 + dtmp2
+
+        self.A = linsolve.splu(A)
+        self.rhs = np.empty((self.ns,))
+
+        # Building bc_coef:
+        nxl = 1 + self.xs
+        sxl = self.sigma * nxl
+        nxu = self.ns + self.xs
+        sxu = self.sigma * nxu
+
+        self.blcoef = 0.5 * self.dt * (- sxl * sxl + self.r * nxl)
+        self.bucoef = 0.5 * self.dt * (- sxu * sxu - self.r * nxu)
+
+    def solve(self):
+        for i in range(0, self.nt):
+            self.rhs[:] = self.u[i, :]
+            self.rhs[0] -= self.blcoef * self.Fl[i]
+            self.rhs[self.ns - 1] -= self.bucoef * self.Fu[i]
+            self.u[i + 1, :] = self.A.solve(self.rhs)
+
+        return self.u
 
 
 def MC_EuroCall(S_0, K, T, r, sigma, M, N, seed=42):
@@ -63,7 +137,7 @@ def BS_EuroPut(S, T, K, r, q, sig):
 # Implement the dynamics
 class BS_FBSDE(FBSDE):
     """
-    dynamics representation of Black-Scholes PDE for European vanilla option
+    Forward Backward dynamic representation of Black-Scholes PDE for European vanilla option
     """
     def __init__(self, config, exclude_spot=False, **kwargs):
         super().__init__(config, exclude_spot)
@@ -86,5 +160,34 @@ class BS_FBSDE(FBSDE):
         elif self.method == 2:
             return -self.r * y
 
-    def g(self, T, x, level=0.01):
+    def g(self, T, x):
         return np.maximum(-self.K + x, 0)
+
+
+class BS_CEV(BS_FBSDE):
+    def __init__(self, config, exclude_spot=False, **kwargs):
+        super(BS_CEV, self).__init__(config, exclude_spot, **kwargs)
+        self.frac = kwargs.get('beta', 0.9)
+
+    def sig_t(self, t, s):
+        return np.array([self.sig * s**self.frac])
+
+
+class BS_SVI(BS_FBSDE):
+    def __init__(self, config, exclude_spot=False, **kwargs):
+        super(BS_SVI, self).__init__(config, exclude_spot, **kwargs)
+        self.a = kwargs.get('a', -4)
+        self.b = kwargs.get('b', 0.8)
+        self.rho = kwargs.get('rho', 0.15)
+        self.m = kwargs.get('m', 0.9)
+        self.sigma = kwargs.get('sigma', 5)
+
+    def raw_svi(self, t, s):
+        FT = self.K * np.exp(self.r * (self.T-t))
+        k = np.log(s/FT)
+
+        return self.a + self.b * (self.rho * (k - self.m) + np.sqrt((k - self.m) ** 2 + self.sig ** 2))
+
+    def sig_t(self, t, s):
+        implied_vol = self.raw_svi(t, s)
+        return np.array([implied_vol * s])

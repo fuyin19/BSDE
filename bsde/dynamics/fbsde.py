@@ -46,12 +46,12 @@ class FBSDE(ABC):
         xs[0, :, :] = x  # Add Initial value x0 for all path
 
         # Compute X_t for all Path
-        for (i, w) in enumerate(dW):  # z, BM incre., d x M
-            w = w.T.reshape(M, d, 1)  # z, BM incre., d x M -> M x d -> M x d x 1
+        for (i, dw) in enumerate(dW):  # z, BM incre., d x M
+            dw = dw.T.reshape(M, d, 1)  # z, BM incre., d x M -> M x d -> M x d x 1
             t += dt  # t, current time
             sig = self.sig_t(t, x).transpose((2, 0, 1))  # sig, vol matrix, d1 x d x M -> M x d1 x d
 
-            x = x + self.mu_t(t, x) * dt + np.matmul(sig, w)[:, :, 0].T  # current X_t, d1 x M
+            x = x + self.mu_t(t, x) * dt + (sig @ dw)[:, :, 0].T  # current X_t, d1 x M
 
             xs[1 + i, :, :] = x  # Add current X_t for all path
 

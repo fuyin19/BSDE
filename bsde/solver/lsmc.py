@@ -55,12 +55,12 @@ class LSMCSolver(ABC):
 
         # Dynamics
         self.FBSDE = FBSDE
-        self.dZ = generate_z_matrix(n_paths=self.M, n_steps=self.N, d_bm=self.d, seed=self.seed)  # BM increments
+        self.dW = np.sqrt(self.dt) * generate_z_matrix(n_paths=self.M, n_steps=self.N, d_bm=self.d, seed=self.seed)  # BM increments
 
         # Initialize path for dynamics
         self.y0 = 0                                                           # Initial value of Y_t
         self.z0 = 0                                                           # Initial value of Z_t
-        self.X_path = self.FBSDE.draw(np.sqrt(self.dt)*self.dZ, self.x0, self.dt)              # X_t path, N+1 x d x M
+        self.X_path = self.FBSDE.draw(self.dW, self.x0, self.dt)              # X_t path, N+1 x d x M
         self.Y_path = np.zeros(shape=(self.N, self.d2, self.M))               # Y_t path, N x d2 x M
         self.Z_path = np.zeros(shape=(self.N - 1, self.d2, self.d, self.M))   # Z_t path, N-1 x d2 x d x M
 
@@ -91,6 +91,15 @@ class LSMCSolver(ABC):
             self.kn = len(basis_funcs)                     # Number of basis function
             self.n_features = (self.kn - 1) * self.d1 + 1  # Number of features in the feature map
             self.basis = basis_funcs                       # List of basis functions
+
+    def set_x0(self, x0, redrawX=True):
+        if x0 != self.x0:
+            self.x0 = x0
+
+        if redrawX:
+            self.seed += 1
+            self.dW = np.sqrt(self.dt) * generate_z_matrix(n_paths=self.M, n_steps=self.N, d_bm=self.d, seed=self.seed)
+            self.X_path = self.FBSDE.draw(self.dW, self.x0, self.dt)
 
     def basis_transform(self, x):
         """
@@ -124,21 +133,21 @@ class LSMCSolver(ABC):
         """
         pass
 
-    def est_z(self, y, dz):
+    def est_z(self, y, dw):
         """
         Compute target variable z in the regression
 
         :param y: Current y, d2 x M
-        :param dz: BM incre. before scaling, d x M
+        :param dw: BM incre. before scaling, d x M
 
         :returns:
             z_estimation, d2 x d x M
         """
         if self.d1 == 1 and self.d == 1:
-            val = 1 / np.sqrt(self.dt) * (np.array([y * dz]))
+            val = 1 / self.dt * (np.array([y * dw]))
         else:
-            val = 1 / np.sqrt(self.dt) * np.matmul(y.T.reshape(self.M, self.d2, 1),
-                                                   dz.T.reshape(self.M, 1, self.d)).transpose((1, 2, 0))
+            val = 1 / self.dt * np.matmul(y.T.reshape(self.M, self.d2, 1),
+                                          dw.T.reshape(self.M, 1, self.d)).transpose((1, 2, 0))
 
         return val
 
@@ -177,7 +186,7 @@ class LSMCSolver(ABC):
             self.Z_path[n - 1, :, :, :] = z
             self.Y_path[n - 1, :, :] = y
 
-        self.z0 = np.mean(self.est_z(y, self.dZ[0, :, :]), axis=2)     # d2 x d, d2 x d x M along M
+        self.z0 = np.mean(self.est_z(y, self.dW[0, :, :]), axis=2)     # d2 x d, d2 x d x M along M
         self.y0 = np.mean(self.est_y(0, self.x0, y, self.z0), axis=1)  # d2, d2 x M along M
 
 
@@ -206,11 +215,11 @@ class LSMCLinear(LSMCSolver):
     def fit(self, n, x, y):
 
         t_n = n * self.dt               # Current time at n
-        dZ_n = self.dZ[n, :, :]         # Brownian motion increments before scaling, d x M
+        dW_n = self.dW[n, :, :]         # Brownian motion increments before scaling, d x M
         X = self.basis_transform(x)     # M x kn
 
         # Compute (alpha, z)
-        z_fit = self.est_z(y, dZ_n).transpose((2, 0, 1)).reshape(self.M, self.d2 * self.d)  # d2 x d x M -> M x d2 x d ->  M x (d2 x d)
+        z_fit = self.est_z(y, dW_n).transpose((2, 0, 1)).reshape(self.M, self.d2 * self.d)  # d2 x d x M -> M x d2 x d ->  M x (d2 x d)
         model_z = self.model.fit(X, z_fit)
 
         alpha = model_z.coef_.T.reshape(self.n_features, self.d2, self.d)  # (d2 x d) x n_f -> n_f x (d2 x d) -> n_f x d2 x d
@@ -240,12 +249,12 @@ class LSMCSVR(LSMCSolver):
 
     def fit(self, n, x, y):
         t_n = n * self.dt            # Current time at n
-        dZ_n = self.dZ[n, :, :]      # Brownian motion increments before scaling, d x M
+        dW_n = self.dW[n, :, :]      # Brownian motion increments, d x M
         # X = self.basis_transform(x)  # M x kn
         X = x.T                      # M x d
 
         # Compute (alpha, z_n)
-        z_fit = self.est_z(y, dZ_n).transpose((2, 0, 1)).reshape((self.M, self.d2 * self.d))  # d2 x d x M -> M x d2 x d ->  M x (d2 x d)
+        z_fit = self.est_z(y, dW_n).transpose((2, 0, 1)).reshape((self.M, self.d2 * self.d))  # d2 x d x M -> M x d2 x d ->  M x (d2 x d)
         z = np.zeros(shape=(self.d2 * self.d, self.M))                                        # (d2 x d) x M
 
         for i in range(self.d2 * self.d):
@@ -278,12 +287,12 @@ class LSMCNeuralNet(LSMCSolver):
 
     def fit(self, n, x, y):
         t_n = n * self.dt            # Current time at n
-        dZ_n = self.dZ[n, :, :]      # Brownian motion increments before scaling, d x M
+        dW_n = self.dW[n, :, :]      # Brownian motion increments before scaling, d x M
         # X = self.basis_transform(x)  # M x kn
         X = x.T
 
         # Compute z
-        z_fit = self.est_z(y, dZ_n).transpose((2, 0, 1)).reshape(self.M, self.d2 * self.d)  # d2 x d x M -> M x d2 x d ->  M x (d2 x d)
+        z_fit = self.est_z(y, dW_n).transpose((2, 0, 1)).reshape(self.M, self.d2 * self.d)  # d2 x d x M -> M x d2 x d ->  M x (d2 x d)
         MLP_z = MLPRegressor(**self.model_params)
         if self.d2 * self.d == 1:
             MLP_z.fit(X, z_fit.ravel())

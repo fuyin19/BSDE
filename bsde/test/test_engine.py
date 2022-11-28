@@ -7,9 +7,24 @@ import bsde.dynamics.european_option as eu
 from bsde.config import ConfigOption, ConfigLSMC
 from bsde.solver.lsmc import LSMCLinear
 from bsde.engine import Engine
+from bsde.test.demo import mc_european_call_cev
 
 
-def test_engine():
+def test_engine(dynamics, configs_solver):
+    # Run the engine
+    engine = Engine(dynamics, configs_solver, LSMCLinear)
+    engine.run()
+
+    print(engine.res)
+
+
+def test_mc_cev(cev_pde, cfgs_solver):
+    beta = 0.9
+    res = mc_european_call_cev(cev_pde, cfgs_solver, beta=beta)
+    print(res)
+
+
+def main():
     # Market Parameters
     r = 0.1
     sigs = [0.1, 0.5, 0.8]
@@ -32,15 +47,8 @@ def test_engine():
     # dynamics
     FBSDEs = [eu.BS_FBSDE(cfg) for cfg in configs_option]
 
-    # Run the engine
-    engine = Engine(FBSDEs, configs_LSMC_solver, LSMCLinear)
-    engine.run()
-
-    print(engine.res)
-
-
-def main():
-    test_engine()
+    # test_engine(FBSDEs, configs_LSMC_solver)
+    test_mc_cev(FBSDEs, configs_LSMC_solver)
 
 
 if __name__ == '__main__':

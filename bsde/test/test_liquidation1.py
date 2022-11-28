@@ -22,7 +22,7 @@ def test_liquidation1():
     dt = T / N
 
     # Model parameters
-    x0 = np.array([100, 0])   # S_0, q_0
+    x0 = np.array([100, 10000000])   # S_0, q_0
     epsilon = 0.1
     sig_s = 0.5
     k = 2

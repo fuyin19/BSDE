@@ -13,6 +13,7 @@ class HJB_liquidation1_FBSDE(FBSDE):
         self.eps = config.eps
         self.k = config.k
         self.T = config.T
+        self.lambda_g = 1000
 
     def mu_t(self, t, x):
         return np.zeros(shape=x.shape)
@@ -51,6 +52,6 @@ class HJB_liquidation1_FBSDE(FBSDE):
         """
         final = np.zeros(shape=(self.d2, x_T.shape[1]))
         mask = x_T[1:, :] > 0
-        final[mask] = -10000000
+        final[mask] = -self.lambda_g
 
         return final
