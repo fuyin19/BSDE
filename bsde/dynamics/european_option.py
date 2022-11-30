@@ -1,7 +1,9 @@
 import numpy as np
+import scipy.sparse.linalg.dsolve as linsolve
+import tensorflow as tf
 from bsde.dynamics.fbsde import FBSDE
 from scipy import sparse
-import scipy.sparse.linalg.dsolve as linsolve
+
 
 
 class BS_FDM_implicit:
@@ -160,8 +162,11 @@ class BS_FBSDE(FBSDE):
         elif self.method == 2:
             return -self.r * y
 
-    def g(self, T, x):
-        return np.maximum(-self.K + x, 0)
+    def g(self, T, x, use_tensor=False):
+        if use_tensor:
+            return tf.math.maximum(-self.K + x, 0)
+        else:
+            return np.maximum(-self.K + x, 0)
 
 
 class BS_CEV(BS_FBSDE):

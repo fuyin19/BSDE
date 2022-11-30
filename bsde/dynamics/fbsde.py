@@ -24,13 +24,13 @@ class FBSDE(ABC):
     def draw(self, dW, x0, dt):
         """
         Inputs:
-            dZ: Gaussian increments with dimension [n_path, n_steps, d_bm]
+            dW: Gaussian increments with dimension [n_steps, d_bm, n_path]
             x0: The initial value X_0
             dt: size of time step for each increment in the time grid
 
         Output:
-            The simulated result of X_t with dimension [n_path, n_steps, d_X].
-            If initial stock price included, the dimension is [n_path, n_steps + 1, d_X].
+            The simulated result of X_t with dimension [n_steps, d_X, n_path].
+            If initial stock price included, the dimension is [n_steps + 1, d_X, n_path].
         """
         self.dW = dW
 

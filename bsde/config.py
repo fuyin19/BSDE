@@ -40,3 +40,20 @@ class ConfigLSMC(ConfigSolver):
         self.model_params = model_params
         self.basis_funcs = basis_funcs
         self.kwargs = kwargs
+
+
+class ConfigDeepBSDE(ConfigSolver):
+    def __init__(self, x0, N, dt, seed, n_hiddens, y_init_range, lr_values,
+                 lr_boundaries, n_iterations, batch_size, valid_size, report_freq, dtype, verbose, **kwargs):
+        super(ConfigDeepBSDE, self).__init__(x0=x0, N=N, M=(n_iterations+1)*batch_size, dt=dt, seed=seed)
+        self.n_hiddens = n_hiddens
+        self.y_init_range = y_init_range
+        self.lr_values = lr_values
+        self.lr_boundaries = lr_boundaries
+        self.n_iterations = n_iterations
+        self.batch_size = batch_size
+        self.valid_size = valid_size
+        self.report_freq = report_freq
+        self.dtype = dtype
+        self.verbose = verbose
+        self.kwargs = kwargs
