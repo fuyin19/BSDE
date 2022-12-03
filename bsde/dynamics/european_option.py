@@ -1,81 +1,6 @@
 import numpy as np
-import scipy.sparse.linalg.dsolve as linsolve
 import tensorflow as tf
 from bsde.dynamics.fbsde import FBSDE
-from scipy import sparse
-
-
-
-class BS_FDM_implicit:
-    def __init__(self,
-                 r,
-                 sigma,
-                 maturity,
-                 Smin,
-                 Smax,
-                 Fl,
-                 Fu,
-                 payoff,
-                 nt,
-                 ns):
-        self.r = r
-        self.sigma = sigma
-        self.maturity = maturity
-
-        self.Smin = Smin
-        self.Smax = Smax
-        self.Fl = Fl
-        self.Fu = Fu
-
-        self.nt = nt
-        self.ns = ns
-
-        self.dt = float(maturity) / nt
-        self.dx = float(Smax - Smin) / (ns + 1)
-        self.xs = Smin / self.dx
-
-        self.u = np.empty((nt + 1, ns))
-        self.u[0, :] = payoff
-
-        # Building Coefficient matrix:
-        A = sparse.lil_matrix((self.ns, self.ns))
-
-        for j in range(0, self.ns):
-            xd = j + 1 + self.xs
-            sx = self.sigma * xd
-            sxsq = sx * sx
-
-            dtmp1 = self.dt * sxsq
-            dtmp2 = self.dt * self.r
-            A[j, j] = 1.0 + dtmp1 + dtmp2
-
-            dtmp1 = -0.5 * dtmp1
-            dtmp2 = -0.5 * dtmp2 * xd
-            if j > 0:
-                A[j, j - 1] = dtmp1 - dtmp2
-            if j < self.ns - 1:
-                A[j, j + 1] = dtmp1 + dtmp2
-
-        self.A = linsolve.splu(A)
-        self.rhs = np.empty((self.ns,))
-
-        # Building bc_coef:
-        nxl = 1 + self.xs
-        sxl = self.sigma * nxl
-        nxu = self.ns + self.xs
-        sxu = self.sigma * nxu
-
-        self.blcoef = 0.5 * self.dt * (- sxl * sxl + self.r * nxl)
-        self.bucoef = 0.5 * self.dt * (- sxu * sxu - self.r * nxu)
-
-    def solve(self):
-        for i in range(0, self.nt):
-            self.rhs[:] = self.u[i, :]
-            self.rhs[0] -= self.blcoef * self.Fl[i]
-            self.rhs[self.ns - 1] -= self.bucoef * self.Fu[i]
-            self.u[i + 1, :] = self.A.solve(self.rhs)
-
-        return self.u
 
 
 def MC_EuroCall(S_0, K, T, r, sigma, M, N, seed=42):
@@ -137,7 +62,7 @@ def BS_EuroPut(S, T, K, r, q, sig):
 
 
 # Implement the dynamics
-class BS_FBSDE(FBSDE):
+class BSEuropeanCall(FBSDE):
     """
     Forward Backward dynamic representation of Black-Scholes PDE for European vanilla option
     """
@@ -148,7 +73,11 @@ class BS_FBSDE(FBSDE):
         self.r = config.r
         self.K = config.K
         self.T = config.T
-        self.method = kwargs.get('method', 1)
+
+        self.method = kwargs.get('method', 2)
+        self.payoff_type = kwargs.get('payoff_type', 'vanilla')
+        if self.payoff_type == 'barrier':
+            self.upper_barrier = kwargs.get('upper_barrier', 1.5*self.K)
 
     def mu_t(self, t, s):
         return self.mu * s
@@ -156,31 +85,33 @@ class BS_FBSDE(FBSDE):
     def sig_t(self, t, s):
         return np.array([self.sig * s])
 
-    def f(self, t, x, y, z):
+    def f(self, t, x, y, z, use_tensor=False):
         if self.method == 1:
             return -1 * ((self.mu - self.r) / self.sig * z[0, 0] + self.r * y)
         elif self.method == 2:
             return -self.r * y
 
     def g(self, T, x, use_tensor=False):
-        if use_tensor:
-            return tf.math.maximum(-self.K + x, 0)
-        else:
-            return np.maximum(-self.K + x, 0)
+        maximum = tf.math.maximum if use_tensor else np.maximum
+        if self.payoff_type == 'vanilla':
+            return maximum(-self.K + x, 0)
+        elif self.payoff_type == 'barrier':
+            where = tf.where if use_tensor else np.where
+            return maximum(-self.K + x, 0) * where(x < self.upper_barrier, 1, 0)
 
 
-class BS_CEV(BS_FBSDE):
+class BSEuropeanCallCEV(BSEuropeanCall):
     def __init__(self, config, exclude_spot=False, **kwargs):
-        super(BS_CEV, self).__init__(config, exclude_spot, **kwargs)
-        self.frac = kwargs.get('beta', 0.9)
+        super(BSEuropeanCallCEV, self).__init__(config, exclude_spot, **kwargs)
+        self.beta = kwargs.get('beta', 0.9)
 
     def sig_t(self, t, s):
-        return np.array([self.sig * s**self.frac])
+        return np.array([self.sig * s**self.beta])
 
 
-class BS_SVI(BS_FBSDE):
+class BSEuropeanCallSVI(BSEuropeanCall):
     def __init__(self, config, exclude_spot=False, **kwargs):
-        super(BS_SVI, self).__init__(config, exclude_spot, **kwargs)
+        super(BSEuropeanCallSVI, self).__init__(config, exclude_spot, **kwargs)
         self.a = kwargs.get('a', -4)
         self.b = kwargs.get('b', 0.8)
         self.rho = kwargs.get('rho', 0.15)

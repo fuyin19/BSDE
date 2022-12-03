@@ -84,10 +84,11 @@ class FBSDE(ABC):
         pass
 
     @abstractmethod
-    def f(self, t, x, y, z):
+    def f(self, t, x, y, z, use_tensor=False):
         """
         Generator of the BSDE
 
+        :param use_tensor: Determine tf.Tensor will be supported
         :param t: the current time
         :param x: the current X_t, d1 x M
         :param y: the current Y_t, d2 x M
@@ -98,10 +99,11 @@ class FBSDE(ABC):
         pass
 
     @abstractmethod
-    def g(self, T, x_T):
+    def g(self, T, x_T, use_tensor=False):
         """
         Final condition of the BSDE
 
+        :param use_tensor: Determine tf.Tensor will be supported
         :param T: the final time
         :param x_T: the final value of X_T, d1 x M
         :return : g, the final value of Y_T, d2 x M

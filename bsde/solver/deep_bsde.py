@@ -22,7 +22,7 @@ class DeepBSDESolver(object):
                                                                                self.cfg.lr_values),
             epsilon=1e-8)
 
-        self.y_0 = self.model.y_0
+        self.y0 = self.model.y0
         self.dW = tf.cast(np.sqrt(self.cfg.dt) * generate_z_matrix(n_paths=self.cfg.M,
                                                                    n_steps=self.cfg.N,
                                                                    d_bm=self.FBSDE.d,
@@ -37,7 +37,7 @@ class DeepBSDESolver(object):
         for step in range(self.cfg.n_iterations + 1):
             # Report training result
             if step % self.cfg.report_freq == 0:
-                print('step: {}, time: {}, y_0: {}'.format(step, int(time.time()-start), self.y_0[0]))
+                print('step: {}, time: {}, y_0: {}'.format(step, int(time.time()-start), self.y0[0]))
 
             # Current batch
             dW = self.dW[:, :, step*self.cfg.batch_size:(step+1)*self.cfg.batch_size]
@@ -77,13 +77,13 @@ class GlobalDNN(tf.keras.Model):
         super(GlobalDNN, self).__init__()
         self.FBSDE = FBSDE
         self.cfg = config_deep_bsde
-        self.y_0 = tf.Variable(np.random.uniform(low=self.cfg.y_init_range[0],
-                                                 high=self.cfg.y_init_range[1],
-                                                 size=[self.FBSDE.d2])
-                               )
-        self.z_0 = tf.Variable(np.random.uniform(low=-.1, high=.1,
-                                                 size=[self.FBSDE.d2, self.FBSDE.d])
-                               )  # 1 x d
+        self.y0 = tf.Variable(np.random.uniform(low=self.cfg.y_init_range[0],
+                                                high=self.cfg.y_init_range[1],
+                                                size=[self.FBSDE.d2])
+                              )
+        self.z0 = tf.Variable(np.random.uniform(low=-.1, high=.1,
+                                                size=[self.FBSDE.d2, self.FBSDE.d])
+                              )  # 1 x d
         self.subnet = [FeedForwardNN(self.FBSDE, self.cfg) for _ in range(self.cfg.N-1)]
 
     def call(self, inputs, training):
@@ -100,17 +100,17 @@ class GlobalDNN(tf.keras.Model):
         ts = np.arange(0, self.cfg.N) * self.cfg.dt
         all_one_vec = tf.ones(shape=[self.cfg.batch_size, self.FBSDE.d2], dtype=self.cfg.dtype)  # M x 1
 
-        y = all_one_vec * self.y_0  # M x 1
-        z = tf.matmul(all_one_vec, self.z_0)  # d x M
+        y = all_one_vec * self.y0  # M x 1
+        z = tf.matmul(all_one_vec, self.z0)  # d x M
 
         for t in range(0, self.cfg.N - 1):
-            y = y - self.cfg.dt * self.FBSDE.f(ts[t], X_path[t, :, :], y.T, z).T \
+            y = y - self.cfg.dt * self.FBSDE.f(ts[t], X_path[t, :, :], y.T, z, use_tensor=True).T \
                 + tf.reduce_sum(z * dW[t, :, :], 0, keepdims=True).T  # d x M -> 1 x M -> M x 1
 
             z = self.subnet[t](X_path[t+1, :, :], training) / self.FBSDE.d
 
         # terminal time
-        y = y - self.cfg.dt * self.FBSDE.f(ts[-1], X_path[-2, :, :], y.T, z).T \
+        y = y - self.cfg.dt * self.FBSDE.f(ts[-1], X_path[-2, :, :], y.T, z, use_tensor=True).T \
             + tf.reduce_sum(z * dW[-1, :, :], 0, keepdims=True).T
 
         return y

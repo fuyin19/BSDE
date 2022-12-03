@@ -1,9 +1,10 @@
 # Implement the dynamics
 
 import numpy as np
+import tensorflow as tf
+import scipy.sparse.linalg.dsolve as linsolve
 from bsde.dynamics.fbsde import FBSDE
 from scipy import sparse
-import scipy.sparse.linalg.dsolve as linsolve
 
 
 class BS_FDM_implicit:
@@ -84,9 +85,9 @@ class BS_FDM_implicit:
         return self.u
 
 
-class BS_american_FBSDE(FBSDE):
+class FSBDEAmericanPut(FBSDE):
     """
-    X_t for American vanilla option
+    FBSDE for American vanilla option
     """
     def __init__(self, config, exclude_spot=False, **kwargs):
         super().__init__(config, exclude_spot)
@@ -97,11 +98,7 @@ class BS_american_FBSDE(FBSDE):
         self.T = config.T
 
         self.method = kwargs.get('method', 1)
-        self.payoff_type = kwargs.get('payoff_type', 'vanilla')
-        self.level = kwargs.get('level', 0.01)
-        if self.payoff_type == 'barrier':
-            self.lower_barrier = kwargs.get('lower_barrier', 20)
-            self.upper_barrier = kwargs.get('upper_barrier', 200)
+        self.level = kwargs.get('level', 0.001)
 
     def mu_t(self, t, s):
         return self.mu * s
@@ -109,27 +106,28 @@ class BS_american_FBSDE(FBSDE):
     def sig_t(self, t, s):
         return np.array([self.sig * s])
 
-    def f(self, t, x, y, z):
+    def f(self, t, x, y, z, use_tensor=False):
         eps = self.level * self.K
         a = self.K - eps
         b = self.K + eps
 
+        where = np.where if not use_tensor else tf.where
+
         if self.method == 1:
             # Check Continuation Region
-            g_val = self.g(t, x)  # d2 x M
-            indicator_ex = np.where(y - g_val <= 0, 1, 0)  # d2 x M
+            g_val = self.g(t, x, use_tensor)  # d2 x M
+            indicator_ex = where(y - g_val <= 0, 1, 0)  # d2 x M
 
             # Compute Lg
-            partial_x = np.where(x < a, -1, 0) + np.where((x >= a) & (x <= b), 1 / (2 * eps) * (x - b), 0)  # d2 x M
-            partial_xx = np.where((x >= a) & (x <= b), 1 / (2 * eps), 0)  # d2 x M
-            Lg = self.mu * x * partial_x + 0.5 * self.sig ** 2 * x ** 2 * partial_xx  # d2 x M
+            partial_x = where(x < a, -1, 0) + where((x >= a) & (x <= b), 1 / (2 * eps) * (x - b), 0)  # d2 x M
+            partial_xx = where((x >= a) & (x <= b), 1 / (2 * eps), 0)  # d2 x M
+            Lg = self.mu * x * partial_x + 0.5 * (self.sig ** 2) * (x ** 2) * partial_xx  # d2 x M
 
             # Compute (Lg - rg)^-
             val = Lg - self.mu * g_val
-            val_minus = -1 * np.where(val <= 0, val, 0)  # d2 x M
+            val_minus = -1 * where(val <= 0, val, 0)  # d2 x M
 
             # Compute f = -ru + (Lg - rg)^- * I
-            # -self.mu * y + val_minus * indicator_ex
             return -self.mu * y + val_minus * indicator_ex
 
         if self.method == 2:
@@ -148,12 +146,47 @@ class BS_american_FBSDE(FBSDE):
             #  Compute q = disc * c * indicator_ex
             return np.exp(-self.mu * t) * c * indicator_ex
 
-    def g(self, T, x):
-        if self.payoff_type == 'vanilla':
-            if self.method == 1:
-                return np.maximum(self.K - x, 0)
-            if self.method == 2:
-                return np.maximum(self.K - x, 0) * np.exp(-self.mu * T)
+    def g(self, T, x, use_tensor=False):
 
-        elif self.payoff_type == 'barrier':
-            return np.maximum(self.K - x, 0) * np.where((x >= self.lower_barrier) & (x <= self.upper_barrier), 1, 0)
+        maximum = tf.math.maximum if use_tensor else np.maximum
+        exp = tf.math.exp if use_tensor else np.exp
+
+        if self.method == 1:
+            return maximum(self.K - x, 0)
+        if self.method == 2:
+            return maximum(self.K - x, 0) * exp(-self.mu * T)
+
+
+class FBSDEAmericanPutBarrier(FSBDEAmericanPut):
+    """
+    FBSDE for American barrier option (not using approximation)
+    """
+    def __init__(self, config, exclude_spot=False, **kwargs):
+        super(FBSDEAmericanPutBarrier, self).__init__(config, exclude_spot)
+        self.lower_barrier = kwargs.get('lower_barrier', 0.75*self.K)
+
+    def f(self, t, x, y, z, use_tensor=False):
+
+        where = np.where if not use_tensor else tf.where
+
+        # Check Continuation Region
+        g_val = self.g(t, x, use_tensor)  # d2 x M
+        indicator_ex = where(y - g_val <= 0, 1, 0)  # d2 x M
+
+        # Compute Lg
+        partial_x = where((x > self.lower_barrier) & (x < self.K), -1., 0)
+        partial_xx = 0
+        Lg = self.mu * x * partial_x + 0.5 * (self.sig ** 2) * (x ** 2) * partial_xx
+
+        # Compute (Lg - rg)^-
+        val = Lg - self.mu * g_val
+        val_minus = -1 * where(val <= 0, val, 0)  # d2 x M
+
+        # Compute f = -ru + (Lg - rg)^- * I
+        return -self.mu * y + val_minus * indicator_ex
+
+    def g(self, T, x, use_tensor=False):
+        where = tf.where if use_tensor else np.where
+        maximum = tf.math.maximum if use_tensor else np.maximum
+
+        return maximum(self.K - x, 0) * where(x >= self.lower_barrier, 1, 0)

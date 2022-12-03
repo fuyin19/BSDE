@@ -7,7 +7,7 @@ import bsde.dynamics.european_option as eu
 from bsde.config import ConfigOption, ConfigLSMC
 from bsde.solver.lsmc import LSMCLinear
 from bsde.engine import Engine
-from bsde.test.demo import mc_european_call_cev
+from bsde.test.demo import mc_european_batch
 
 
 def test_engine(dynamics, configs_solver):
@@ -20,7 +20,7 @@ def test_engine(dynamics, configs_solver):
 
 def test_mc_cev(cev_pde, cfgs_solver):
     beta = 0.9
-    res = mc_european_call_cev(cev_pde, cfgs_solver, beta=beta)
+    res = mc_european_batch(cev_pde, cfgs_solver)
     print(res)
 
 
@@ -44,10 +44,12 @@ def main():
     configs_option = [ConfigOption(r=r, sig=sig, K=K, T=T, d=d, d1=d1, d2=d2) for sig in sigs]
     configs_LSMC_solver = [ConfigLSMC(N=N, M=M, dt=dt, seed=42, x0=s0, model_params={}, reg_method=None) for M in Ms]
 
-    # dynamics
-    FBSDEs = [eu.BS_FBSDE(cfg) for cfg in configs_option]
+    # BS
+    FBSDEs = [eu.BSEuropeanCall(cfg) for cfg in configs_option]
+    test_engine(FBSDEs, configs_LSMC_solver)
 
-    # test_engine(FBSDEs, configs_LSMC_solver)
+    # CEV
+    FBSDEs = [eu.BSEuropeanCallCEV(cfg, beta=0.9) for cfg in configs_option]
     test_mc_cev(FBSDEs, configs_LSMC_solver)
 
 
