@@ -16,11 +16,12 @@ class ConfigOption(ConfigFBSDE):
 
 
 class ConfigHJB1(ConfigFBSDE):
-    def __init__(self, sig_s, k, eps, T, d, d1, d2):
+    def __init__(self, sig_s, k, eps, lb, T, d, d1, d2):
         super(ConfigHJB1, self).__init__(d, d1, d2)
         self.sig_s = sig_s
-        self.k = k
         self.eps = eps
+        self.lb = lb
+        self.k = k
         self.T = T
 
 
@@ -57,3 +58,9 @@ class ConfigDeepBSDE(ConfigSolver):
         self.dtype = dtype
         self.verbose = verbose
         self.kwargs = kwargs
+
+
+class ConfigFBSNN(ConfigSolver):
+    def __init__(self, x0, N, M, dt, seed, layers):
+        super(ConfigFBSNN, self).__init__(x0=x0, N=N, M=M, dt=dt, seed=seed)
+        self.layers = layers

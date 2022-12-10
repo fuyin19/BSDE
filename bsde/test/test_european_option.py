@@ -6,23 +6,29 @@ import bsde.dynamics.european_option as eu
 
 from bsde.test.demo import mc_european, show_bs_pde_result
 from bsde.config import ConfigOption, ConfigLSMC, ConfigDeepBSDE
-from bsde.solver.lsmc import LSMCLinear, LSMCSVR, LSMCNeuralNet
+from bsde.solver.lsmc import LSMCLinear, LSMCSVR, LSMCNeuralNet, LSMCKernelRidge
 from bsde.solver.deep_bsde import DeepBSDESolver
 
 
-def test_bs_european_call(payoff_type, cfg_pde, cfg_lsmc_solver, cfg_deep_bsde_solver):
+def test_bs_european_call(payoff_type, cfg_pde, cfg_linear_solver, cfg_kernel_solver, cfg_deep_bsde_solver):
     """
     Test the European call option price computed by dynamics
     """
     bs_pde = eu.BSEuropeanCall(cfg_pde, payoff_type=payoff_type, exclude_spot=False, method=2)
 
     # Linear Model
-    linear_solver = LSMCLinear(bs_pde, cfg_lsmc_solver, basis_funcs_type='poly')
+    linear_solver = LSMCLinear(bs_pde, cfg_linear_solver, basis_funcs_type='poly')
     linear_solver.solve()
     print('{} call-BS-lsmc-linear: {}'.format(payoff_type, linear_solver.y0[0]))
 
-    # Deep BSDE
+    # Kernel-Ridge
     if False:
+        kr_solver = LSMCKernelRidge(bs_pde, cfg_kernel_solver)
+        kr_solver.solve()
+        print('{} call-BS-lsmc-kr: {}'.format(payoff_type, kr_solver.y0[0]))
+
+    # Deep BSDE
+    if True:
         deep_solver = DeepBSDESolver(bs_pde, cfg_deep_bsde_solver)
         deep_solver.train()
         print(deep_solver.training_time)
@@ -72,14 +78,14 @@ def test_svi_european_call(payoff_type, cfg_pde, cfg_lsmc_solver, cfg_deep_solve
 
 
 def main():
-    payoff_type = 'barrier'
+    payoff_type = 'vanilla'
 
     # Market Parameters
     # mu = 0.1
     r = 0.00
     sig = 0.4
     s0 = np.array([40])
-    T = 1
+    T = 0.2
     K = 40
 
     # Simulation parameters
@@ -94,11 +100,13 @@ def main():
     cfg_pde = ConfigOption(r=r, sig=sig, K=K, T=T, d=d, d1=d1, d2=d2)
     cfg_lsmc_linear = ConfigLSMC(N=N, M=M, dt=dt, seed=42, x0=s0,
                                  model_params={'fit_intercept': False}, reg_method=None)
+    cfg_lsmc_kr = ConfigLSMC(N=N, M=M, dt=dt, seed=42, x0=s0, model_params={'kernel': 'rbf'})
+
     cfg_deep_solver = ConfigDeepBSDE(N=N, M=M, dt=dt, seed=42, x0=s0,
-                                     y_init_range=[13, 15],
+                                     y_init_range=[1, 7],
                                      n_hiddens=[10+d, 10+d],
-                                     lr_values=[5e-3, 5e-3],
-                                     lr_boundaries=[2000],
+                                     lr_values=[5e-3, 9e-4, 5e-4],
+                                     lr_boundaries=[2000, 3000],
                                      n_iterations=4000,
                                      batch_size=128,
                                      valid_size=64,
@@ -113,9 +121,9 @@ def main():
     show_bs_pde_result(style='European', payoff_type=payoff_type, r=r, sig=sig, s0=s0, T=T, K=K)
 
     # run tests
-    test_bs_european_call(payoff_type, cfg_pde, cfg_lsmc_linear, cfg_deep_solver)
-    test_cev_european_call(payoff_type, cfg_pde, cfg_lsmc_linear, cfg_deep_solver)
-    test_svi_european_call(payoff_type, cfg_pde, cfg_lsmc_linear, cfg_deep_solver)
+    test_bs_european_call(payoff_type, cfg_pde, cfg_lsmc_linear, cfg_lsmc_kr, cfg_deep_solver)
+    # test_cev_european_call(payoff_type, cfg_pde, cfg_lsmc_linear, cfg_deep_solver)
+    # test_svi_european_call(payoff_type, cfg_pde, cfg_lsmc_linear, cfg_deep_solver)
 
 
 if __name__ == '__main__':

@@ -16,6 +16,8 @@ class DeepBSDESolver(object):
     def __init__(self, FBSDE, config_deep_bsde):
         self.FBSDE = FBSDE
         self.cfg = config_deep_bsde
+        self.seed = self.cfg.seed
+
         self.model = GlobalDNN(FBSDE=FBSDE, config_deep_bsde=config_deep_bsde)
         self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=tf.keras.optimizers.schedules.PiecewiseConstantDecay(self.cfg.lr_boundaries,
@@ -23,25 +25,23 @@ class DeepBSDESolver(object):
             epsilon=1e-8)
 
         self.y0 = self.model.y0
-        self.dW = tf.cast(np.sqrt(self.cfg.dt) * generate_z_matrix(n_paths=self.cfg.M,
-                                                                   n_steps=self.cfg.N,
-                                                                   d_bm=self.FBSDE.d,
-                                                                   seed=self.cfg.seed), dtype=self.cfg.dtype)  # N x d x M
-        self.X_path = tf.cast(self.FBSDE.draw(dW=self.dW,
-                                              x0=self.cfg.x0,
-                                              dt=self.cfg.dt), dtype=self.cfg.dtype)  # N x d x M
+        self.dW, self.X_path = self.sample(M=self.cfg.M)
+
         self.training_time = 0
 
     def train(self):
         start = time.time()
         for step in range(self.cfg.n_iterations + 1):
-            # Report training result
-            if step % self.cfg.report_freq == 0:
-                print('step: {}, time: {}, y_0: {}'.format(step, int(time.time()-start), self.y0[0]))
 
             # Current batch
             dW = self.dW[:, :, step*self.cfg.batch_size:(step+1)*self.cfg.batch_size]
             X_path = self.X_path[:, :, step*self.cfg.batch_size:(step+1)*self.cfg.batch_size]
+
+            # Report training result
+            if step % self.cfg.report_freq == 0 and self.cfg.verbose is True:
+                loss_val = self.loss(self.sample(M=self.cfg.valid_size), training=False).numpy()
+                print('step: {}, time: {}, y_0: {}, loss: {}'.format(step, int(time.time() - start), self.y0[0],
+                                                                     loss_val))
 
             self.train_step((dW, X_path))
         self.training_time = time.time() - start
@@ -50,6 +50,7 @@ class DeepBSDESolver(object):
         dW, X_path = inputs
         y_T = self.model((dW, X_path), training)
         delta = y_T - self.FBSDE.g(self.FBSDE.T, X_path[-1, :, :], use_tensor=True).T
+
         # use linear approximation outside the clipped range
         loss_val = tf.reduce_mean(tf.where(tf.abs(delta) < DELTA_CLIP, tf.square(delta),
                                   2 * DELTA_CLIP * tf.abs(delta) - DELTA_CLIP ** 2))
@@ -67,6 +68,18 @@ class DeepBSDESolver(object):
     def train_step(self, train_data):
         grad = self.gradient(train_data, training=True)
         self.optimizer.apply_gradients(zip(grad, self.model.trainable_variables))
+
+    def sample(self, M):
+        dW = tf.cast(np.sqrt(self.cfg.dt) * generate_z_matrix(n_paths=M,
+                                                              n_steps=self.cfg.N,
+                                                              d_bm=self.FBSDE.d,
+                                                              seed=self.seed), dtype=self.cfg.dtype)  # N x d x M
+        X_path = tf.cast(self.FBSDE.draw(dW=dW,
+                                         x0=self.cfg.x0,
+                                         dt=self.cfg.dt), dtype=self.cfg.dtype)  # N x d x M
+        self.seed += 1
+
+        return dW, X_path
 
 
 class GlobalDNN(tf.keras.Model):
@@ -90,28 +103,26 @@ class GlobalDNN(tf.keras.Model):
         """
         Forward pass of the global Neural Net
 
-        :param inputs: dW, X_path;
-            dW: BM incre., N x d x M
-            X_path: Forward path, N x d x M
+        :param inputs: dW, X_path; dW: BM incre., N x d x M; X_path: Forward path, N x d x M
         :param training: Trainable, True/False
         :return: y_T, the final value of y, d2
         """
         dW, X_path = inputs
         ts = np.arange(0, self.cfg.N) * self.cfg.dt
-        all_one_vec = tf.ones(shape=[self.cfg.batch_size, self.FBSDE.d2], dtype=self.cfg.dtype)  # M x 1
+        all_one_vec = tf.ones(shape=tf.stack([tf.shape(dW)[-1], 1]), dtype=self.cfg.dtype)  # M x 1
 
         y = all_one_vec * self.y0  # M x 1
-        z = tf.matmul(all_one_vec, self.z0)  # d x M
+        z = tf.matmul(all_one_vec, self.z0)  # M x d
 
         for t in range(0, self.cfg.N - 1):
-            y = y - self.cfg.dt * self.FBSDE.f(ts[t], X_path[t, :, :], y.T, z, use_tensor=True).T \
-                + tf.reduce_sum(z * dW[t, :, :], 0, keepdims=True).T  # d x M -> 1 x M -> M x 1
+            y = y - self.cfg.dt * self.FBSDE.f(ts[t], X_path[t, :, :], y.T, tf.expand_dims(z.T, axis=0), use_tensor=True).T \
+                + tf.reduce_sum(z * dW[t, :, :].T, 0, keepdims=True)  # M x d ->  M x 1
 
-            z = self.subnet[t](X_path[t+1, :, :], training) / self.FBSDE.d
+            z = self.subnet[t](X_path[t+1, :, :].T, training) / self.FBSDE.d  # M x d
 
         # terminal time
-        y = y - self.cfg.dt * self.FBSDE.f(ts[-1], X_path[-2, :, :], y.T, z, use_tensor=True).T \
-            + tf.reduce_sum(z * dW[-1, :, :], 0, keepdims=True).T
+        y = y - self.cfg.dt * self.FBSDE.f(ts[-1], X_path[-2, :, :], y.T, tf.expand_dims(z.T, axis=0), use_tensor=True).T \
+            + tf.reduce_sum(z * dW[-1, :, :].T, 0, keepdims=True)
 
         return y
 

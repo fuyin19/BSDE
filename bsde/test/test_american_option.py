@@ -36,7 +36,7 @@ def test_american_put(payoff_type, cfg_am_put, cfg_lsmc_solver, cfg_deep_solver,
 
     # DeepBSDE Method 1
     if False:
-        deep_solver = DeepBSDESolver(FBSDE_american_put, cfg_deep_solver)
+        deep_solver = DeepBSDESolver(FBSDE, cfg_deep_solver)
         deep_solver.train()
         print("American {} option pricing by BSDE method 1: {}, with S0 = {}".format(payoff_type, deep_solver.y0[0],
                                                                                      cfg_deep_solver.x0[0]))
@@ -44,15 +44,15 @@ def test_american_put(payoff_type, cfg_am_put, cfg_lsmc_solver, cfg_deep_solver,
 
 def main():
 
-    payoff_type = 'barrier'
+    payoff_type = 'vanilla'
 
     # Market Parameters
-    r = 0.06
-    sig = 0.4
+    r = 0.04
+    sig = 0.6
     s0 = np.array([40])
     T = 1
     K = 40.
-    lower_barrier = 35
+    lower_barrier = 30
     # lower_barrier = kwargs.get('lower_barrier', 20)
     # upper_barrier = kwargs.get('upper_barrier', 200)
 
@@ -71,7 +71,7 @@ def main():
     config_deep_solver = ConfigDeepBSDE(N=N, M=M, dt=dt, seed=42, x0=s0,
                                         y_init_range=[5, 10],
                                         n_hiddens=[10+d, 10+d],
-                                        lr_values=[5e-3, 5e-3],
+                                        lr_values=[2e-3, 1e-3],
                                         lr_boundaries=[2000],
                                         n_iterations=4000,
                                         batch_size=256,

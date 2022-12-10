@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
 from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
+from sklearn.kernel_ridge import KernelRidge
 
 
 def generate_z_matrix(n_paths, n_steps, d_bm, seed=42):
@@ -313,4 +314,39 @@ class LSMCNeuralNet(LSMCSolver):
         # record value
         self.y_func.append(MLP_y)
         self.z_func.append(MLP_z)
+        return z, y
+
+
+class LSMCKernelRidge(LSMCSolver):
+    def __init__(self, FBSDE, config, **kwargs):
+        super(LSMCKernelRidge, self).__init__(FBSDE, config, **kwargs)
+        self.model_Y = []
+        self.model_Z = []
+
+    def fit(self, n, x, y):
+        t_n = n * self.dt  # Current time at n
+        dW_n = self.dW[n, :, :]  # Brownian motion increments before scaling, d x M
+        # X = self.basis_transform(x)  # M x kn
+        X = x.T  # M x kn
+
+        # Compute Z
+        z_fit = self.est_z(y, dW_n).transpose((2, 0, 1)).reshape(self.M,
+                                                                 self.d2 * self.d)  # d2 x d x M -> M x d2 x d ->  M x (d2 x d)
+        model_z = KernelRidge(**self.model_params)
+        model_z.fit(X, z_fit)
+
+        z = model_z.predict(X).reshape(self.M, self.d2, self.d).transpose(
+            (1, 2, 0))  # M x (d2 x d) -> M x d2 x d -> d2 x d x M
+
+        # Compute Y
+        y_fit = self.est_y(t_n, x, y, z).T  # d2 x M -> M x d2
+        model_y = KernelRidge(**self.model_params)
+        model_y.fit(X, y_fit)
+
+        y = model_y.predict(X).T  # M x d2 -> d2 x M
+
+        # record model
+        self.model_Z.append(model_z)
+        self.model_Y.append(model_y)
+
         return z, y
