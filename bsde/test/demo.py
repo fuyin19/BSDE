@@ -266,3 +266,62 @@ def pde_american_put_batch(payoff_type, configs_option, s0s):
             pde_res[i, j] = BS_price
 
     return pde_res
+
+
+def pde_european_call_batch(payoff_type, configs_option, s0s):
+    """
+    Price for different spot, while fix other params
+    """
+    pde_res = np.zeros(shape=(len(configs_option), len(s0s)))
+
+    for (i, option) in enumerate(configs_option):
+        for (j, s0) in enumerate(s0s):
+            BS_price = bs_pde_result('European', payoff_type, s0=[s0], T=option.T,
+                                     K=option.K, r=option.r, sig=option.sig)
+            pde_res[i, j] = BS_price
+
+    return pde_res
+
+
+def bs_pde_result(style, payoff_type, r, sig, s0, T, K, **kwargs):
+    # PDE - variational equation
+    S_min = 0.0
+    S_max = 700
+    nt = 5000
+    ns = 1399
+    S_s = np.linspace(S_min, S_max, ns + 2)
+    t_s = np.linspace(0, T, nt + 1)
+    final_payoff = None
+    B_upper = None
+    B_lower = None
+
+    if style == 'European':
+        if payoff_type == 'vanilla':
+            final_payoff = np.maximum(- K + S_s, 0)
+            B_upper = np.exp(-r * t_s) * (S_max - K)
+            B_lower = 0 * t_s
+        elif payoff_type == 'barrier':
+            upper_barrier = kwargs.get('upper_barrier', 1.5 * K)
+            final_payoff = np.maximum(S_s - K, 0) * np.where((S_s <= upper_barrier), 1, 0)
+            B_upper = 0 * t_s
+            B_lower = 0 * t_s
+    elif style == 'American':
+        if payoff_type == 'vanilla':
+            final_payoff = np.maximum(K - S_s, 0)
+            B_upper = 0 * t_s
+            B_lower = np.exp(-r * t_s) * K
+        elif payoff_type == 'barrier':
+            lower_barrier = kwargs.get('lower_barrier', 0.75 * K)
+            final_payoff = np.maximum(K - S_s, 0) * np.where((S_s >= lower_barrier), 1, 0)
+            B_upper = 0 * t_s
+            B_lower = 0 * t_s
+
+    BS_PDE_solver = BS_FDM_implicit(r, sig, T, S_min, S_max, B_lower, B_upper, final_payoff[1:-1], nt, ns, style=style)
+
+    u_implicit = BS_PDE_solver.solve()
+    n_row = len(u_implicit[:, 1])
+
+    u = u_implicit[n_row - 1, :]
+    s0_idx = int(2 * s0[0] - 1)
+
+    return u[s0_idx]
