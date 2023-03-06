@@ -5,6 +5,11 @@ from abc import ABC, abstractmethod
 tf.compat.v1.disable_v2_behavior()
 
 
+"""
+The following code borrows from the paper arXiv:1804.07010 (2018) by Maziar Raissi
+"""
+
+
 class FBSNN(ABC):  # Forward-Backward Stochastic Neural Network
     """
     @author: Maziar Raissi
