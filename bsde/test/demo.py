@@ -166,100 +166,103 @@ def bs_european_call_batch(configs_option, s0):
     return bs_res
 
 
-def plot_european_call(solver_res, MC_res, configs_option, configs_solver, analytical_res=None):
+def plot_convergence(solver_res, configs_option, configs_solver, benchmark_res=None):
     """
     plot the price of European Options for different
-        1.sigmas, vol level
-        2.M, number of path
+        1.M, number of path
     while other parameters stay the same.
 
     :param solver_res: Result from BSDE solvers, n_solver x n_options x n_sim_configs
-    :param MC_res: Result from standard MC, n_options x n_sim_configs
+    :param benchmark_res: Result from the benchmark method, either BS or MC
     :param configs_option: Options to be priced
     :param configs_solver: Solvers parameter
-    :param analytical_res: Analytical Value
-    :return: None
+    :return:
     """
-
-    f, axes = plt.subplots(1, len(configs_option), figsize=(15, 4), dpi=80)
+    fig = plt.figure(figsize=(8, 6), dpi=80)
     for (i, option) in enumerate(configs_option):
 
         # BSDE
         for res in solver_res:
-            axes[i].plot(np.log2([cf.M for cf in configs_solver]), res[0, i, :])
-
-        # Monte-Carlo
-        axes[i].plot(np.log2([cf.M for cf in configs_solver]), MC_res[i, :])
+            plt.plot(np.log2([cf.M for cf in configs_solver]), res[0, i, :])
 
         # Analytical
-        if analytical_res is not None:
-            axes[i].axhline(analytical_res[i], linestyle='-.')
-            axes[i].legend(['LSMC-OLS', 'LSMC-ridge', 'Monte-Carlo', 'Analytical'])
+        if benchmark_res is not None:
+            plt.axhline(benchmark_res[i], linestyle='-.')
+            plt.legend(['LSMC-OLS', 'LSMC-ridge', 'Benchmark'])
         else:
-            axes[i].legend(['LSMC-OLS', 'LSMC-ridge', 'Monte-Carlo'])
+            plt.legend(['LSMC-OLS', 'LSMC-ridge'])
 
         # set title, labels, etc.
-        axes[i].set_title('sigma={}'.format(option.sig))
-        axes[i].set_xlabel('Number of Path - log scale')
-        axes[i].set_ylabel('Price')
-
-    plt.tight_layout()
-    plt.savefig('european_option_update.png', dpi=300, bbox_inches="tight")
-    plt.show()
+        plt.title('American Put Option, sigma={}'.format(option.sig))
+        plt.xlabel('Number of Path - log scale')
+        plt.ylabel('Price')
 
 
-def plot_american_put(solver_res, PDE_res, configs_option, configs_solver):
-    f, axes = plt.subplots(1, len(configs_option), figsize=(15, 4), dpi=80, sharex=True)
-    for (i, option) in enumerate(configs_option):
+def plot_price(solver_res, benchmark_res, s0s):
+    fig = plt.figure(figsize=(8, 6), dpi=80)
+    plt.plot(s0s, benchmark_res[0, :])
+    plt.plot(s0s, solver_res[0][0, 0, :], linestyle='-.')
+    plt.plot(s0s, solver_res[1][0, 0, :], linestyle='dashed')
 
-        # BSDE
-        for res in solver_res:
-            axes[i].plot(np.log2([cf.M for cf in configs_solver]), res[0, i, :])
-
-        # PDE
-        axes[i].axhline(PDE_res[i], linestyle='-.')
-
-        # set labels, title, etc.
-        axes[i].legend(['LSMC-OLS', 'LSMC-ridge', 'PDE'])
-        axes[i].set_title('sigma={}'.format(option.sig))
-        axes[i].set_xlabel('Number of Path - log scale')
-        axes[i].set_ylabel('Price')
-
-    plt.tight_layout()
-    plt.savefig('American_option_update.png', dpi=300, bbox_inches="tight")
-    plt.show()
+    # set title, labels, etc.
+    plt.xlabel('S0')
+    plt.ylabel('Price')
 
 
-def PDE_european_call_cev(configs_option, configs_solver, beta=1):
-    """
-    Not Working currently
-    """
-    # result
-    PDE_res = np.zeros(len(configs_option))
-
-    # params
-    s0 = configs_solver[0].x0[0]
+def bs_pde_result(style, payoff_type, r, sig, s0, T, K, **kwargs):
+    # PDE - variational equation
     S_min = 0.0
-    S_max = 400.
+    S_max = 700
     nt = 5000
-    ns = 799
+    ns = 1399
     S_s = np.linspace(S_min, S_max, ns + 2)
+    t_s = np.linspace(0, T, nt + 1)
+    final_payoff = None
+    B_upper = None
+    B_lower = None
+
+    if style == 'European':
+        if payoff_type == 'vanilla':
+            final_payoff = np.maximum(- K + S_s, 0)
+            B_upper = np.exp(-r * t_s) * (S_max - K)
+            B_lower = 0 * t_s
+        elif payoff_type == 'barrier':
+            upper_barrier = kwargs.get('upper_barrier', 1.5 * K)
+            final_payoff = np.maximum(S_s - K, 0) * np.where((S_s <= upper_barrier), 1, 0)
+            B_upper = 0 * t_s
+            B_lower = 0 * t_s
+    elif style == 'American':
+        if payoff_type == 'vanilla':
+            final_payoff = np.maximum(K - S_s, 0)
+            B_upper = 0 * t_s
+            B_lower = np.exp(-r * t_s) * K
+        elif payoff_type == 'barrier':
+            lower_barrier = kwargs.get('lower_barrier', 0.75 * K)
+            final_payoff = np.maximum(K - S_s, 0) * np.where((S_s >= lower_barrier), 1, 0)
+            B_upper = 0 * t_s
+            B_lower = 0 * t_s
+
+    BS_PDE_solver = BS_FDM_implicit(r, sig, T, S_min, S_max, B_lower, B_upper, final_payoff[1:-1], nt, ns, style=style)
+
+    u_implicit = BS_PDE_solver.solve()
+    n_row = len(u_implicit[:, 1])
+
+    u = u_implicit[n_row - 1, :]
+    s0_idx = int(2 * s0[0] - 1)
+
+    return u[s0_idx]
+
+
+def pde_american_put_batch(payoff_type, configs_option, s0s):
+    """
+    Price for different spot, while fix other params
+    """
+    pde_res = np.zeros(shape=(len(configs_option), len(s0s)))
 
     for (i, option) in enumerate(configs_option):
-        t_s = np.linspace(0, option.T, nt + 1)
-        final_payoff = np.maximum(S_s - option.K, 0)
-        B_upper = np.exp(-option.r * t_s) * (S_max - option.K)
-        B_lower = 0 * t_s
+        for (j, s0) in enumerate(s0s):
+            BS_price = bs_pde_result('American', payoff_type, s0=[s0], T=option.T,
+                                     K=option.K, r=option.r, sig=option.sig)
+            pde_res[i, j] = BS_price
 
-        BS_PDE_solver = BS_FDM_implicit(option.r,
-                                        option.sig,
-                                        option.T,
-                                        S_min, S_max, B_lower, B_upper, final_payoff[1:-1], nt, ns,
-                                        beta=beta)
-        u = BS_PDE_solver.solve()[-1, :]
-
-        s0_idx = int(2 * s0 - 1)
-
-        PDE_res[i] = u[s0_idx]
-
-    return PDE_res
+    return pde_res
