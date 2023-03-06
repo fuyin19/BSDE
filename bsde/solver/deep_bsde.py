@@ -28,8 +28,13 @@ class DeepBSDESolver(object):
         self.dW, self.X_path = self.sample(M=self.cfg.M)
 
         self.training_time = 0
+        self.valid_loss = []
+        self.y0_path = []
 
     def train(self):
+        """
+        Train the global dnn model
+        """
         start = time.time()
         for step in range(self.cfg.n_iterations + 1):
 
@@ -42,11 +47,20 @@ class DeepBSDESolver(object):
                 loss_val = self.loss(self.sample(M=self.cfg.valid_size), training=False).numpy()
                 print('step: {}, time: {}, y_0: {}, loss: {}'.format(step, int(time.time() - start), self.y0[0],
                                                                      loss_val))
+                self.y0_path.append(self.y0[0].numpy())
+                self.valid_loss.append(loss_val)
 
             self.train_step((dW, X_path))
         self.training_time = time.time() - start
 
     def loss(self, inputs, training):
+        """
+        Compute the loss of the global dnn model
+
+        :param inputs: dW, X_path; dW: BM incre., N x d x M; X_path: Forward path, N x d x M
+        :param training: Trainable, True/False
+        :return: loss_val, the value of the loss function
+        """
         dW, X_path = inputs
         y_T = self.model((dW, X_path), training)
         delta = y_T - self.FBSDE.g(self.FBSDE.T, X_path[-1, :, :], use_tensor=True).T
