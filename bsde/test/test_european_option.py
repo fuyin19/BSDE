@@ -12,7 +12,7 @@ from bsde.solver.deep_bsde import DeepBSDESolver
 
 def test_bs_european_call(payoff_type, cfg_pde, cfg_linear_solver, cfg_kernel_solver, cfg_deep_bsde_solver):
     """
-    Test the European call option price computed by dynamics
+    Test the European call option price in BS model
     """
     bs_pde = eu.BSEuropeanCall(cfg_pde, payoff_type=payoff_type, exclude_spot=False, method=2)
 
@@ -28,7 +28,7 @@ def test_bs_european_call(payoff_type, cfg_pde, cfg_linear_solver, cfg_kernel_so
         print('{} call-BS-lsmc-kr: {}'.format(payoff_type, kr_solver.y0[0]))
 
     # Deep BSDE
-    if True:
+    if False:
         deep_solver = DeepBSDESolver(bs_pde, cfg_deep_bsde_solver)
         deep_solver.train()
         print(deep_solver.training_time)
@@ -50,7 +50,10 @@ def test_bs_european_call(payoff_type, cfg_pde, cfg_linear_solver, cfg_kernel_so
     print()
 
 
-def test_cev_european_call(payoff_type, cfg_pde, cfg_lsmc_solver, cfg_deep_solver):
+def test_cev_european_call(payoff_type, cfg_pde, cfg_lsmc_solver):
+    """
+    Test the European call option price in CEV model
+    """
     # CEV
     print('CEV:')
     cev_pde = eu.BSEuropeanCallCEV(cfg_pde, payoff_type=payoff_type, beta=0.9)
@@ -63,7 +66,10 @@ def test_cev_european_call(payoff_type, cfg_pde, cfg_lsmc_solver, cfg_deep_solve
     print()
 
 
-def test_svi_european_call(payoff_type, cfg_pde, cfg_lsmc_solver, cfg_deep_solver):
+def test_svi_european_call(payoff_type, cfg_pde, cfg_lsmc_solver):
+    """
+    Test the European call option price in SVI/local vol model
+    """
     # SVI
     print('SVI:')
     params = {'a': 0.4, 'b': 0.04, 'rho': 0.1, 'm': 0.01, 'sigma': 30}
@@ -82,11 +88,11 @@ def main():
 
     # Market Parameters
     # mu = 0.1
-    r = 0.00
-    sig = 0.4
-    s0 = np.array([40])
-    T = 0.2
-    K = 40
+    r = 0.06
+    sig = 0.5
+    s0 = np.array([30])
+    T = 1
+    K = 30
 
     # Simulation parameters
     M = 2 ** 16
@@ -121,9 +127,9 @@ def main():
     show_bs_pde_result(style='European', payoff_type=payoff_type, r=r, sig=sig, s0=s0, T=T, K=K)
 
     # run tests
-    test_bs_european_call(payoff_type, cfg_pde, cfg_lsmc_linear, cfg_lsmc_kr, cfg_deep_solver)
-    # test_cev_european_call(payoff_type, cfg_pde, cfg_lsmc_linear, cfg_deep_solver)
-    # test_svi_european_call(payoff_type, cfg_pde, cfg_lsmc_linear, cfg_deep_solver)
+    # test_bs_european_call(payoff_type, cfg_pde, cfg_lsmc_linear, cfg_lsmc_kr, cfg_deep_solver)
+    test_cev_european_call(payoff_type, cfg_pde, cfg_lsmc_linear)
+    test_svi_european_call(payoff_type, cfg_pde, cfg_lsmc_linear)
 
 
 if __name__ == '__main__':
